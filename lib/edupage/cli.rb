@@ -170,27 +170,54 @@ module Edupage
       Server::MCP.new(account_options: account_options).run_stdio
     end
 
+    MCP_TARGETS = %w[claude-code claude-desktop all].freeze
+
+    CLAUDE_DESKTOP_CONFIG =
+      "~/Library/Application Support/Claude/claude_desktop_config.json".freeze
+
+    desc "mcp-add TARGET", "Register this server with #{MCP_TARGETS.join(", ")}"
+    method_option :http, type: :boolean,
+                         desc: "Register the HTTP endpoint of a running `edupage server` instead of stdio"
+    method_option :name, type: :string, desc: "Key under mcpServers (default: edupage)"
+    method_option :host, type: :string, desc: "Host for --http"
+    method_option :port, type: :numeric, desc: "Port for --http"
+    method_option :scope, type: :string, enum: %w[local user project],
+                          desc: "Claude Code scope (default: local)"
+    method_option :dry_run, type: :boolean, aliases: "-n",
+                            desc: "Show what would be done without registering anything"
+    map "mcp-add" => :mcp_add
+    def mcp_add(target = nil)
+      unless MCP_TARGETS.include?(target)
+        raise Thor::Error, "Usage: edupage mcp-add TARGET, where TARGET is #{MCP_TARGETS.join(", ")}"
+      end
+
+      name = options[:name] || "edupage"
+      entry = options[:http] ? http_entry : stdio_entry
+      targets = target == "all" ? MCP_TARGETS - ["all"] : [target]
+
+      targets.each do |each|
+        case each
+        when "claude-code" then add_to_claude_code(name, entry)
+        when "claude-desktop" then add_to_claude_desktop(name, entry)
+        end
+      end
+    end
+
     desc "mcp-config", "Print an mcpServers entry for Claude Desktop or Claude Code"
     method_option :http, type: :boolean,
                          desc: "Connect to a running `edupage server` over HTTP instead of stdio"
     method_option :name, type: :string, desc: "Key under mcpServers (default: edupage)"
     method_option :host, type: :string, desc: "Host for --http"
     method_option :port, type: :numeric, desc: "Port for --http"
-    method_option :command, type: :boolean,
-                            desc: "Print a ready-to-run `claude mcp add` line instead of JSON"
     # Thor looks commands up by method name, so the hyphenated form needs mapping.
     map "mcp-config" => :mcp_config
     def mcp_config
       name = options[:name] || "edupage"
       entry = options[:http] ? http_entry : stdio_entry
 
-      return $stdout.puts(claude_add_command(name, entry)) if options[:command]
-
-      # The JSON goes to stdout so it can be piped or redirected; the notes go to stderr
-      # so they never end up inside the file.
+      # Nothing but the JSON, so `edupage mcp-config > entry.json` and piping into jq
+      # both work. Use `mcp-add --dry-run` to see what registering would do.
       $stdout.puts(::JSON.pretty_generate("mcpServers" => { name => entry }))
-      $stdout.flush # otherwise the notes below overtake the JSON on a terminal
-      warn_mcp_placement(name, entry)
     end
 
     desc "version", "Print the version"
@@ -362,6 +389,102 @@ module Edupage
       path.empty? ? "bundle" : path
     end
 
+    # Claude Code owns its own config, so registration goes through its CLI rather than
+    # editing the file behind its back.
+    def add_to_claude_code(name, entry)
+      command = claude_add_command(name, entry)
+
+      if options[:dry_run]
+        say "claude-code   : would run"
+        say "  #{command}"
+        return
+      end
+
+      raise Thor::Error, "`claude` is not on PATH; install Claude Code or use mcp-config" if which("claude").nil?
+
+      # Idempotent: `claude mcp add` refuses a name it already knows, so an existing
+      # entry is dropped first and re-added. Running this twice converges instead of
+      # failing the second time.
+      existed = claude_code_knows?(name)
+      system("claude", "mcp", "remove", name, *scope_arguments, out: File::NULL, err: File::NULL) if existed
+
+      raise Thor::Error, "`claude mcp add` failed" unless system(command, out: File::NULL)
+
+      say "claude-code   : #{existed ? "updated" : "added"} #{name}#{scope_note}"
+    end
+
+    def claude_code_knows?(name)
+      system("claude", "mcp", "get", name, out: File::NULL, err: File::NULL)
+    end
+
+    def scope_arguments = options[:scope] ? ["-s", options[:scope]] : []
+    def scope_note = options[:scope] ? " (#{options[:scope]} scope)" : ""
+
+    # Claude Desktop has no CLI, so its JSON is merged by hand - preserving the other
+    # servers and the unrelated top-level keys it keeps in the same file.
+    def add_to_claude_desktop(name, entry)
+      path = File.expand_path(CLAUDE_DESKTOP_CONFIG)
+      config = read_json_file(path)
+      servers = config["mcpServers"] ||= {}
+
+      # Idempotent: an identical entry is left alone, a different one is brought into
+      # line, and a missing one is added.
+      current = servers[name]
+      action = if current.nil? then :added
+               elsif current == entry then :unchanged
+               else :updated
+               end
+
+      if options[:dry_run]
+        say "claude-desktop: would leave #{name.inspect} unchanged in #{path}" and return if action == :unchanged
+
+        say "claude-desktop: would #{action == :added ? "add" : "update"} #{name.inspect} in #{path}"
+        say ::JSON.pretty_generate(name => entry).gsub(/^/, "  ")
+        return
+      end
+
+      return say "claude-desktop: #{name} already up to date" if action == :unchanged
+
+      servers[name] = entry
+      write_json_file(path, config)
+      say "claude-desktop: #{action} #{name} in #{path}"
+      say "                restart Claude Desktop for it to pick this up", :yellow
+    end
+
+    def read_json_file(path)
+      return {} unless File.exist?(path)
+
+      # UTF-8 explicitly; other servers in this file may have non-ASCII values and the
+      # locale is not guaranteed to be set.
+      content = File.read(path, encoding: Encoding::UTF_8)
+      return {} if content.strip.empty?
+
+      ::JSON.parse(content)
+    rescue ::JSON::ParserError => e
+      raise Thor::Error, "#{path} is not valid JSON (#{e.message}); fix or move it first"
+    end
+
+    # Writes via a temporary file and keeps one backup: this is a config the user owns
+    # and may have other servers in.
+    def write_json_file(path, data)
+      FileUtils.mkdir_p(File.dirname(path))
+      FileUtils.cp(path, "#{path}.bak") if File.exist?(path)
+
+      temp = "#{path}.#{Process.pid}.tmp"
+      File.open(temp, File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |file|
+        file.set_encoding(Encoding::UTF_8)
+        file.write(::JSON.pretty_generate(data))
+        file.write("\n")
+      end
+      File.rename(temp, path)
+    end
+
+    def which(command)
+      ENV.fetch("PATH", "").split(File::PATH_SEPARATOR)
+         .map { |dir| File.join(dir, command) }
+         .find { |candidate| File.executable?(candidate) && !File.directory?(candidate) }
+    end
+
     # Builds the equivalent `claude mcp add` invocation, shell-quoted so it can be
     # pasted or piped straight into a shell.
     #
@@ -369,13 +492,18 @@ module Edupage
     # while HTTP takes a URL and repeatable --header flags.
     def claude_add_command(name, entry)
       parts = ["claude", "mcp", "add"]
+      parts += ["-s", options[:scope]] if options[:scope]
 
       if entry["type"] == "http"
         parts += ["--transport", "http", name, entry["url"]]
         entry.fetch("headers", {}).each { |key, value| parts += ["--header", "#{key}: #{value}"] }
       else
+        # The name has to come before -e: `claude mcp add` takes --env variadically, so
+        # a name placed after it is swallowed as another KEY=value and rejected with
+        # "Invalid environment variable format".
+        parts << name
         entry.fetch("env", {}).each { |key, value| parts += ["-e", "#{key}=#{value}"] }
-        parts += [name, "--", entry["command"], *entry["args"]]
+        parts += ["--", entry["command"], *entry["args"]]
       end
 
       parts.map { |part| shell_quote(part) }.join(" ")
@@ -389,24 +517,6 @@ module Edupage
       return part if part.match?(SHELL_SAFE)
 
       "'#{part.gsub("'", %q('\''))}'"
-    end
-
-    def warn_mcp_placement(name, entry)
-      $stderr.puts <<~NOTES
-
-        Claude Code, in one step (add --scope user to make it available everywhere):
-          #{claude_add_command(name, entry)}
-
-        Or merge the object above into .mcp.json in a project, or ~/.claude.json.
-        Claude Desktop: merge into ~/Library/Application Support/Claude/claude_desktop_config.json
-      NOTES
-
-      return unless options[:http]
-
-      $stderr.puts <<~TOKEN
-
-        The token lives in #{Edupage.config.path}, and `edupage server` has to be running.
-      TOKEN
     end
 
     def keychain_status(username)

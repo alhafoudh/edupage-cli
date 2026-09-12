@@ -1,6 +1,9 @@
 require "tmpdir"
 
 require "edupage"
+# Loaded eagerly so the safety stub below can reach the constant in every spec, not
+# only the ones that require the CLI themselves.
+require "edupage/cli"
 require_relative "support/vcr"
 require_relative "support/payloads"
 require_relative "support/fake_session"
@@ -34,6 +37,16 @@ RSpec.configure do |config|
   # Guards against a spec accidentally reading the developer's own credentials.
   config.before do
     %w[EDUPAGE_USERNAME EDUPAGE_PASSWORD EDUPAGE_SCHOOL].each { |k| ENV.delete(k) }
+  end
+
+  # mcp-add writes real config files. Point that path at the per-example temp directory
+  # for every spec, so no test can reach the developer's actual Claude Desktop config
+  # even if it forgets to stub it itself.
+  config.before do
+    stub_const(
+      "Edupage::CLI::CLAUDE_DESKTOP_CONFIG",
+      File.join(Edupage::Config.cache_dir, "claude_desktop_config.json")
+    )
   end
 
   config.define_derived_metadata(file_path: %r{/keychain}) do |meta|

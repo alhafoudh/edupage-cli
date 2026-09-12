@@ -75,4 +75,22 @@ RSpec.describe Edupage::Cache do
 
     expect(Dir.glob(File.join(root, "**", "*.tmp"))).to be_empty
   end
+
+  it "round-trips non-ASCII text whatever the locale says" do
+    # An MCP client or a launchd job starts the process with no LANG, which makes
+    # Ruby's default_external US-ASCII. Reading a cached page through the locale then
+    # raises Encoding::InvalidByteSequenceError on the first Slovak name in it.
+    name = "Základná škola Demo"
+    original = Encoding.default_external
+
+    begin
+      Encoding.default_external = Encoding::US_ASCII
+      cache.fetch("s", "2026", "c", "doc") { { "name" => name } }
+
+      expect(cache.fetch("s", "2026", "c", "doc") { raise "should have been cached" })
+        .to eq("name" => name)
+    ensure
+      Encoding.default_external = original
+    end
+  end
 end

@@ -85,7 +85,9 @@ module Edupage
     def read
       return {} unless File.exist?(path)
 
-      content = File.read(path)
+      # UTF-8 explicitly: the stored display name can contain diacritics, and a process
+      # started without LANG would otherwise read it as US-ASCII and fail to parse.
+      content = File.read(path, encoding: Encoding::UTF_8)
       return {} if content.strip.empty?
 
       JSON.parse(content)
@@ -99,6 +101,7 @@ module Edupage
     def transaction
       FileUtils.mkdir_p(File.dirname(path))
       File.open(path, File::RDWR | File::CREAT, 0o600) do |file|
+        file.set_encoding(Encoding::UTF_8)
         file.flock(File::LOCK_EX)
         begin
           raw = file.read

@@ -55,7 +55,10 @@ module Edupage
       return nil unless File.exist?(path)
       return nil unless fresh?(path, ttl)
 
-      JSON.parse(File.read(path))
+      # Explicit UTF-8, never the locale's default: these payloads are full of Slovak
+      # names, and a process launched without LANG (an MCP client, a launchd job) gets
+      # US-ASCII as default_external, which makes every read of a cached page fail.
+      JSON.parse(File.read(path, encoding: Encoding::UTF_8))
     rescue JSON::ParserError, Errno::ENOENT
       nil
     end
@@ -65,7 +68,7 @@ module Edupage
       # Written via a temporary file so a concurrent reader never sees a half-written
       # document; several processes share this directory.
       temp = "#{path}.#{Process.pid}.tmp"
-      File.write(temp, JSON.generate(value))
+      File.write(temp, JSON.generate(value), mode: "w:UTF-8")
       File.rename(temp, path)
       value
     rescue SystemCallError => e

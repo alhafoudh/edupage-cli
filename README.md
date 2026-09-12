@@ -117,24 +117,37 @@ Every route is `GET`; the MCP tools are all annotated read-only.
 
 ### Wiring MCP up
 
-`edupage mcp-config` prints the `mcpServers` entry; `--command` prints the equivalent
-`claude mcp add` line instead. Both transports are available:
+`edupage mcp-add` registers this server with a client; `edupage mcp-config` just prints
+the `mcpServers` entry if you would rather place it yourself.
 
 ```bash
-edupage mcp-config                       # stdio JSON, for Claude Desktop or .mcp.json
-edupage mcp-config --command             # claude mcp add ... (stdio)
-edupage mcp-config --http                # streamable HTTP JSON, with the bearer token
-edupage mcp-config --http --command      # claude mcp add --transport http ...
+edupage mcp-add claude-code --scope user    # via `claude mcp add`
+edupage mcp-add claude-desktop              # merged into claude_desktop_config.json
+edupage mcp-add all --scope user            # both
+edupage mcp-add all --dry-run               # show what would happen, change nothing
+edupage mcp-add all --http                  # register the HTTP endpoint instead of stdio
+
+edupage mcp-config                          # the JSON, and nothing but the JSON
+edupage mcp-config --http
 ```
 
-stdio is the better default for a local tool: the client owns the process, so there is
-nothing to authenticate and no server to keep running. The HTTP variant points at
-`/mcp` on a running `edupage server` and carries the token as an `Authorization`
-header - useful when several clients share one process.
+Adding is **idempotent**: running it again leaves an identical entry alone, brings a
+differing one into line, and adds a missing one. The Claude Desktop file is merged
+rather than replaced - other servers and unrelated settings survive - and the previous
+version is kept as `.bak`.
 
-The JSON goes to stdout and the notes to stderr, so
-`edupage mcp-config > entry.json` gives a clean file. Neither variant pins a school or
-student: those are levels of the chain and the model has to choose them per call.
+stdio is the better default for a local tool: the client owns the process, so there is
+nothing to authenticate and no server to keep running. `--http` points at `/mcp` on a
+running `edupage server` and carries the token as an `Authorization` header, which
+suits several clients sharing one process.
+
+Neither variant pins a school or student: those are levels of the chain and the model
+has to choose them per call.
+
+The generated stdio entry uses absolute paths and sets `BUNDLE_GEMFILE`, because MCP
+clients start servers from a working directory of their own choosing - and it is worth
+knowing that they also start them with **no locale set**, which is why every file this
+tool reads is opened as UTF-8 explicitly rather than through `Encoding.default_external`.
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \

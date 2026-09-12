@@ -21,7 +21,9 @@ module Edupage
 
     class << self
       def load(path = self.path)
-        raw = File.exist?(path) ? (YAML.safe_load_file(path) || {}) : {}
+        # Read as UTF-8 rather than through the locale, so a process started without
+        # LANG (an MCP client, launchd) does not choke on a non-ASCII value.
+        raw = File.exist?(path) ? (YAML.safe_load(File.read(path, encoding: Encoding::UTF_8)) || {}) : {}
         new(deep_merge(DEFAULTS, raw), path: path)
       end
 
@@ -85,6 +87,7 @@ module Edupage
       FileUtils.mkdir_p(File.dirname(path))
       # Written 0600: the file carries the server bearer token.
       File.open(path, File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |f|
+        f.set_encoding(Encoding::UTF_8)
         f.write(YAML.dump(@data))
       end
       self
