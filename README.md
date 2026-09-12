@@ -1,44 +1,44 @@
 # edupage-cli
 
-Read-only access to an [Edupage](https://www.edupage.org) school account, as a Ruby
-library, a CLI, a REST API and an MCP server - all four backed by the same code and
-kept in step by a parity test.
+Read-only prístup k účtu na [Edupage](https://www.edupage.org) - ako Ruby knižnica, CLI,
+REST API a MCP server. Všetky štyri povrchy stoja na tom istom kóde a drží ich v súlade
+parity test.
 
-Edupage has no public API. Every page is server-rendered HTML with JSON embedded in
-`<script>` blocks, and the session carries hidden cursors for "current child" and
-"current school year" that have to be steered before a fetch means anything. This
-handles all of that.
+Edupage nemá verejné API. Každá stránka je server-rendered HTML s JSON-om zabaleným
+v `<script>` blokoch a session si navyše drží skryté kurzory "aktuálne dieťa" a
+"aktuálny školský rok", ktoré treba nastaviť skôr, než má fetch vôbec zmysel. Toto
+všetko rieši knižnica za teba.
 
-## Install
+## Inštalácia
 
 ```bash
 bundle install
 bundle exec exe/edupage login
 ```
 
-`login` verifies the password against Edupage before storing it in the macOS keychain,
-so a typo never gets saved.
+`login` heslo najprv overí voči Edupage a až potom ho uloží do macOS keychainu, takže
+sa tam nikdy nedostane preklep.
 
 ## Credentials
 
-Resolved in this order:
+Hľadajú sa v tomto poradí:
 
-| Order | Source |
+| Poradie | Zdroj |
 |---|---|
 | 1 | `EDUPAGE_USERNAME`, `EDUPAGE_PASSWORD`, `EDUPAGE_SCHOOL` |
-| 2 | macOS keychain (service `edupage-cli`), via `edupage login` |
+| 2 | macOS keychain (service `edupage-cli`), cez `edupage login` |
 
-`edupage auth` shows which one is in play, and warns when `EDUPAGE_PASSWORD` is
-shadowing a stored password - otherwise `edupage login` looks like it did nothing.
+`edupage auth` ukáže, ktorý zdroj sa práve používa, a upozorní, keď `EDUPAGE_PASSWORD`
+prekrýva heslo v keychaine - inak by to vyzeralo, že `edupage login` nič neurobil.
 
-Non-secret defaults live in `~/.config/edupage-cli/config.yml`; sessions and cached
-pages in `~/.cache/edupage-cli/`.
+Netajné nastavenia sú v `~/.config/edupage-cli/config.yml`, session a cache stránok
+v `~/.cache/edupage-cli/`.
 
-## The chain
+## Reťazec
 
-Everything hangs off `account > school > student > year`, and no level can be skipped.
-Each one resolves the same way: an explicit choice wins, a single option is taken
-silently, and anything else is refused with the options listed.
+Všetko visí na `account > škola > študent > ročník` a žiadna úroveň sa nedá preskočiť.
+Každá sa rozhoduje rovnako: explicitný výber vyhráva, jediná možnosť sa vezme ticho,
+čokoľvek iné skončí chybou so zoznamom možností.
 
 ```
 $ edupage students
@@ -47,12 +47,11 @@ No school selected. Pick one:
   --school zusdemo  Základná umelecká škola Demo
 ```
 
-A config default is **not** a choice: `default_school` only says which
-`*.edupage.org` host to log in against, never whose data you are reading.
+Default v configu sa **za výber nepočíta**: `default_school` hovorí len to, na ktorý
+`*.edupage.org` host sa prihlásiť, nikdy nie to, čie dáta čítaš.
 
-The year is the one exception - it defaults to the current one, since "now" is
-unambiguous. The output says which year it used, and points elsewhere when that year
-is empty:
+Jedinou výnimkou je ročník - ten sa doplní na aktuálny, lebo "teraz" je jednoznačné.
+Výstup vždy povie, ktorý rok použil, a keď je prázdny, ukáže, kde dáta sú:
 
 ```
 $ edupage grades --school zsdemo --student Jana
@@ -75,16 +74,17 @@ edupage grades     --school zsdemo --student Jana --year 2025 --term P1 --subjec
 edupage timeline   --school zsdemo --student Peter --type message
 ```
 
-Global options: `--school --student --year --username --json --yaml --no-cache --verbose`.
-Student names match on a unique prefix, so `--student Jana` is enough.
+Globálne prepínače: `--school --student --year --username --json --yaml --no-cache
+--verbose`. Meno študenta stačí zadať ako unikátny prefix, takže `--student Jana`
+postačuje.
 
-Table output carries a header naming the school, student and year it came from; `--json`
-and `--yaml` do not, so they stay byte-identical to the REST and MCP payloads.
+Tabuľkový výstup má hlavičku s tým, z akej školy, študenta a roka dáta pochádzajú;
+`--json` a `--yaml` ju nemajú, aby zostali bajt na bajt zhodné s REST a MCP odpoveďami.
 
-Housekeeping: `edupage auth`, `edupage session status|refresh|logout`,
+Servisné príkazy: `edupage auth`, `edupage session status|refresh|logout`,
 `edupage cache info|clear`, `edupage config path|get|set`.
 
-## Library
+## Knižnica
 
 ```ruby
 require "edupage"
@@ -92,71 +92,70 @@ require "edupage"
 school = Edupage.account.school("zsdemo")
 jana = school.students.find_by(name: /Jana/)
 
-jana.timetable                                  # today
-jana.timetable(Date.today..Date.today + 6)      # a week
+jana.timetable                                  # dnes
+jana.timetable(Date.today..Date.today + 6)      # týždeň
 jana.homeworks.where(subject: "SJL").order(:due_on)
 
-jana.years                                      # 2026 (current), 2025, 2024 ...
+jana.years                                      # 2026 (aktuálny), 2025, 2024 ...
 jana.year(2025).grades.where(term: :P1, subject: "MAT")
-jana.grades                                     # shorthand for the current year
+jana.grades                                     # skratka pre aktuálny rok
 ```
 
-Collections are lazy and chainable: `where order limit offset find_by first count`.
-`where(name: ...)` searches a record's name, short code and id; every other key
-compares that attribute, and accepts a value, a regexp, a range, an array or a lambda.
+Kolekcie sú lazy a reťaziteľné: `where order limit offset find_by first count`.
+`where(name: ...)` hľadá naprieč menom, skratkou aj id záznamu; každý iný kľúč porovnáva
+svoj atribút a berie hodnotu, regexp, range, pole alebo lambdu.
 
 ## Server
 
 ```bash
-edupage server            # REST on /api/v1, MCP on /mcp
-edupage mcp               # MCP over stdio, for editors and desktop clients
+edupage server            # REST na /api/v1, MCP na /mcp
+edupage mcp               # MCP cez stdio, pre editory a desktop klientov
 ```
 
-Binds to `127.0.0.1` with a bearer token generated into the config file on first run.
-Every route is `GET`; the MCP tools are all annotated read-only.
-
-### Wiring MCP up
-
-`edupage mcp-add` registers this server with a client; `edupage mcp-config` just prints
-the `mcpServers` entry if you would rather place it yourself.
-
-```bash
-edupage mcp-add claude-code --scope user    # via `claude mcp add`
-edupage mcp-add claude-desktop              # merged into claude_desktop_config.json
-edupage mcp-add all --scope user            # both
-edupage mcp-add all --dry-run               # show what would happen, change nothing
-edupage mcp-add all --http                  # register the HTTP endpoint instead of stdio
-
-edupage mcp-config                          # the JSON, and nothing but the JSON
-edupage mcp-config --http
-```
-
-Adding is **idempotent**: running it again leaves an identical entry alone, brings a
-differing one into line, and adds a missing one. The Claude Desktop file is merged
-rather than replaced - other servers and unrelated settings survive - and the previous
-version is kept as `.bak`.
-
-stdio is the better default for a local tool: the client owns the process, so there is
-nothing to authenticate and no server to keep running. `--http` points at `/mcp` on a
-running `edupage server` and carries the token as an `Authorization` header, which
-suits several clients sharing one process.
-
-Neither variant pins a school or student: those are levels of the chain and the model
-has to choose them per call.
-
-The generated stdio entry uses absolute paths and sets `BUNDLE_GEMFILE`, because MCP
-clients start servers from a working directory of their own choosing - and it is worth
-knowing that they also start them with **no locale set**, which is why every file this
-tool reads is opened as UTF-8 explicitly rather than through `Encoding.default_external`.
+Počúva na `127.0.0.1` a pri prvom spustení si vygeneruje bearer token do configu.
+Všetky rúty sú `GET`, všetky MCP tooly sú označené ako read-only.
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
   "http://127.0.0.1:4567/api/v1/schools/zsdemo/students/Jana/years/2025/grades?term=P1"
 ```
 
-## How the surfaces stay in step
+### Zapojenie MCP
 
-Resources are declared once, in `lib/edupage/registry/resources.rb`:
+`edupage mcp-add` zaregistruje server u klienta, `edupage mcp-config` iba vypíše
+`mcpServers` záznam, keď si ho chceš umiestniť sám.
+
+```bash
+edupage mcp-add claude-code --scope user    # cez `claude mcp add`
+edupage mcp-add claude-desktop              # zlúči sa do claude_desktop_config.json
+edupage mcp-add all --scope user            # oboje
+edupage mcp-add all --dry-run               # ukáže, čo by spravil, nezmení nič
+edupage mcp-add all --http                  # zaregistruje HTTP endpoint namiesto stdio
+
+edupage mcp-config                          # len JSON a nič iné
+edupage mcp-config --http
+```
+
+Pridávanie je **idempotentné**: zhodný záznam nechá tak, odlišný zosúladí a chýbajúci
+doplní. Config Claude Desktopu sa zlučuje, nie prepisuje - ostatné servery aj nesúvisiace
+nastavenia zostanú - a predošlá verzia sa odloží ako `.bak`.
+
+Pre lokálny nástroj je lepší default stdio: proces vlastní klient, takže netreba nič
+autentifikovať ani držať bežiaci server. `--http` mieri na `/mcp` bežiaceho
+`edupage server` a nesie token v `Authorization` hlavičke, čo sa hodí, keď jeden proces
+zdieľa viac klientov.
+
+Ani jeden variant nepripína školu ani študenta - to sú úrovne reťazca a model si ich má
+zvoliť pri každom volaní.
+
+Vygenerovaný stdio záznam používa absolútne cesty a nastavuje `BUNDLE_GEMFILE`, lebo MCP
+klienti spúšťajú servery z vlastného pracovného adresára. A spúšťajú ich aj **bez
+nastaveného locale**, čo je dôvod, prečo každý súbor otvárame explicitne ako UTF-8
+a nie cez `Encoding.default_external`.
+
+## Ako povrchy zostávajú v súlade
+
+Resources sú deklarované raz, v `lib/edupage/registry/resources.rb`:
 
 ```ruby
 resource :grades do
@@ -167,45 +166,46 @@ resource :grades do
 end
 ```
 
-The CLI command, the REST route and the MCP tool are all generated from that, and
-`spec/registry_parity_spec.rb` fails if any of them goes missing or its parameters
-drift. The `--json` output, the REST body and the MCP tool result run through one
-serializer, so they are byte-identical.
+Z toho sa vygeneruje CLI príkaz, REST rúta aj MCP tool a `spec/registry_parity_spec.rb`
+spadne, ak niektorý chýba alebo sa mu rozídu parametre. Výstup `--json`, telo REST
+odpovede aj výsledok MCP toolu idú cez jeden serializer, takže sú bajt na bajt zhodné.
 
-`scope` also declares which levels of the chain a resource stands on, so all three
-surfaces enforce it the same way: the REST path carries them as segments, the MCP input
-schema marks them required, and the CLI refuses with a list of options.
+`scope` zároveň deklaruje, na ktorých úrovniach reťazca resource stojí, takže ho všetky
+tri povrchy vynucujú rovnako: REST ich nesie ako segmenty cesty, MCP input schéma ich
+označí ako required a CLI odmietne so zoznamom možností.
 
-## Notes on Edupage itself
+## Poznámky k samotnému Edupage
 
-Things worth knowing, all verified against a live account:
+Veci, ktoré stojí za to vedieť - všetky overené proti živému účtu:
 
-- **One login can span several schools.** `mauth` returns one session per school.
-- **The session holds a current child and a current school year.** Switching either is
-  a side effect on shared server state, so it happens under a file lock and every
-  response is checked against what was asked for.
-- **Those switches lag.** Edupage acknowledges a switch immediately but serves the
-  previous child's or year's page for another request or two, so fetches retry until
-  the page agrees. Returning the lagging page would quietly hand back the wrong
-  child's timetable.
-- **The directory changes between years.** The 2025 class list is not the 2026 one, so
-  the year is part of every cache key.
-- **The timeline is shared across a parent's children** and split locally by the
-  `childGroups` map.
-- **Homework comes in two shapes** - set to a class, or to one pupil. Both are needed:
-  on the account this was built against, 15 of one child's 16 tasks are the second kind.
+- **Jeden login môže pokrývať viac škôl.** `mauth` vráti jednu session na každú školu.
+- **Session drží aktuálne dieťa a aktuálny školský rok.** Prepnutie ktoréhokoľvek z nich
+  je side effect na zdieľanom stave servera, takže prebieha pod file lockom a každá
+  odpoveď sa kontroluje proti tomu, čo sa pýtalo.
+- **Tieto prepnutia zaostávajú.** Edupage prepnutie potvrdí okamžite, ale ešte request
+  alebo dva servíruje stránku predošlého dieťaťa či roka, takže sa fetch opakuje, kým sa
+  stránka nezhoduje. Vrátiť zaostávajúcu stránku by potichu znamenalo rozvrh iného dieťaťa.
+- **Číselníky sa medzi rokmi menia.** Zoznam tried za 2025 nie je ten istý ako za 2026,
+  preto je rok súčasťou každého cache kľúča.
+- **Timeline je spoločná pre všetky deti rodiča** a delí sa lokálne podľa mapy
+  `childGroups`.
+- **Domáce úlohy majú dva tvary** - zadané triede alebo jednému žiakovi. Treba oba: na
+  účte, na ktorom to vzniklo, je 15 zo 16 úloh jedného dieťaťa toho druhého druhu.
 
-## Development
+## Vývoj
 
 ```bash
 bundle exec rspec
 ```
 
-Specs run against handcrafted payloads rather than recorded pages: the real ones are
-hundreds of kilobytes and carry other people's children's names.
+Testy bežia proti ručne písaným payloadom, nie proti nahratým stránkam: tie skutočné
+majú stovky kilobajtov a sú v nich mená cudzích detí.
 
-## Scope
+CI beží na Ruby 3.2, 3.3 a 3.4 na Linuxe, plus jeden macOS job, ktorý si vytvorí vlastný
+odomknutý keychain, aby sa keychain testy naozaj spustili a nepreskočili.
 
-Read-only, deliberately. Nothing here writes to Edupage - no replies, no marking things
-done, no signing grades. `spec/registry_parity_spec.rb` asserts that no write endpoint
-is referenced anywhere in `lib/`.
+## Rozsah
+
+Read-only, zámerne. Nič tu do Edupage nezapisuje - žiadne odpovede na správy, žiadne
+označovanie úloh za hotové, žiadne podpisovanie známok. `spec/registry_parity_spec.rb`
+aj samostatný CI job overujú, že sa v `lib/` neobjaví write endpoint.
