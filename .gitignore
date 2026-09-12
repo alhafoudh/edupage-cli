@@ -1,3 +1,7 @@
+# Local environment: points at a specific school and, usually, a password manager.
+# mise.toml.example is the template.
+/mise.toml
+
 /.bundle/
 /vendor/bundle/
 /pkg/

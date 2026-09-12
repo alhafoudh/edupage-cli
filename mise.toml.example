@@ -1,0 +1,19 @@
+[tools]
+ruby = "3.4.5"
+
+# Copy to mise.toml (which is gitignored) and fill in your own school and account.
+#
+# None of this is required: `edupage login` stores the password in the macOS keychain
+# and the CLI reads it from there. These variables exist for the cases where an
+# environment is easier than a keychain - CI, a container, a one-off run - and they
+# take priority over the keychain when set.
+[env]
+
+# Your school's Edupage host, with or without the .edupage.org suffix.
+EDUPAGE_SCHOOL = "yourschool.edupage.org"
+
+# Plain values work. The template form below pulls them out of 1Password instead, so
+# the password never sits in a file; any command that prints a secret to stdout will do.
+EDUPAGE_USERNAME = "you@example.com"
+# EDUPAGE_USERNAME = "{{ exec(command='op read \"op://Private/Edupage/username\"', cache_duration='1h') }}"
+# EDUPAGE_PASSWORD = "{{ exec(command='op read \"op://Private/Edupage/password\"', cache_duration='1h') }}"

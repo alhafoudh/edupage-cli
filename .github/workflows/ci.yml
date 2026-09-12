@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: rspec (ruby ${{ matrix.ruby }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.2", "3.3", "3.4"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      # The keychain specs exclude themselves off macOS, so this covers everything
+      # else. The suite never touches the network: WebMock blocks it and the VCR
+      # cassettes are :none.
+      - run: bundle exec rspec
+
+  keychain:
+    name: rspec (macOS, keychain)
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      # The keychain provider is macOS-only and full of sharp edges worth testing for
+      # real (security hex-encodes non-ASCII passwords and exits 0 on a mismatched
+      # write). A dedicated unlocked keychain keeps that off the runner's login one and
+      # avoids depending on how it happens to be configured.
+      - name: Create a scratch keychain
+        run: |
+          security create-keychain -p "" spec.keychain
+          security default-keychain -s spec.keychain
+          security unlock-keychain -p "" spec.keychain
+          security set-keychain-settings spec.keychain
+
+      - run: bundle exec rspec
+
+  read-only:
+    name: no write endpoints
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # This project only ever reads from Edupage. Guarding it in CI as well as in the
+      # suite means a write endpoint cannot arrive unnoticed through a merge.
+      - name: Assert no Edupage write endpoint is referenced
+        run: |
+          if grep -rnE '(createItem|createReply|homeworkFlag|uploadAtt|signIntoLesson|sendMessage|createConfirmation)' lib/; then
+            echo "::error::lib/ references an Edupage write endpoint; this project is read-only"
+            exit 1
+          fi
+          echo "no write endpoints in lib/"
