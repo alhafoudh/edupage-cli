@@ -115,6 +115,27 @@ edupage mcp               # MCP over stdio, for editors and desktop clients
 Binds to `127.0.0.1` with a bearer token generated into the config file on first run.
 Every route is `GET`; the MCP tools are all annotated read-only.
 
+### Wiring MCP up
+
+`edupage mcp-config` prints the `mcpServers` entry; `--command` prints the equivalent
+`claude mcp add` line instead. Both transports are available:
+
+```bash
+edupage mcp-config                       # stdio JSON, for Claude Desktop or .mcp.json
+edupage mcp-config --command             # claude mcp add ... (stdio)
+edupage mcp-config --http                # streamable HTTP JSON, with the bearer token
+edupage mcp-config --http --command      # claude mcp add --transport http ...
+```
+
+stdio is the better default for a local tool: the client owns the process, so there is
+nothing to authenticate and no server to keep running. The HTTP variant points at
+`/mcp` on a running `edupage server` and carries the token as an `Authorization`
+header - useful when several clients share one process.
+
+The JSON goes to stdout and the notes to stderr, so
+`edupage mcp-config > entry.json` gives a clean file. Neither variant pins a school or
+student: those are levels of the chain and the model has to choose them per call.
+
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
   "http://127.0.0.1:4567/api/v1/schools/zsdemo/students/Jana/years/2025/grades?term=P1"

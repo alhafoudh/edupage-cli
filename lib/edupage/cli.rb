@@ -1,4 +1,6 @@
 require "io/console"
+require "json"
+require "shellwords"
 require "thor"
 
 module Edupage
@@ -168,6 +170,29 @@ module Edupage
       Server::MCP.new(account_options: account_options).run_stdio
     end
 
+    desc "mcp-config", "Print an mcpServers entry for Claude Desktop or Claude Code"
+    method_option :http, type: :boolean,
+                         desc: "Connect to a running `edupage server` over HTTP instead of stdio"
+    method_option :name, type: :string, desc: "Key under mcpServers (default: edupage)"
+    method_option :host, type: :string, desc: "Host for --http"
+    method_option :port, type: :numeric, desc: "Port for --http"
+    method_option :command, type: :boolean,
+                            desc: "Print a ready-to-run `claude mcp add` line instead of JSON"
+    # Thor looks commands up by method name, so the hyphenated form needs mapping.
+    map "mcp-config" => :mcp_config
+    def mcp_config
+      name = options[:name] || "edupage"
+      entry = options[:http] ? http_entry : stdio_entry
+
+      return $stdout.puts(claude_add_command(name, entry)) if options[:command]
+
+      # The JSON goes to stdout so it can be piped or redirected; the notes go to stderr
+      # so they never end up inside the file.
+      $stdout.puts(::JSON.pretty_generate("mcpServers" => { name => entry }))
+      $stdout.flush # otherwise the notes below overtake the JSON on a terminal
+      warn_mcp_placement(name, entry)
+    end
+
     desc "version", "Print the version"
     def version = say(VERSION)
 
@@ -285,6 +310,103 @@ module Edupage
 
       Edupage.config.save
       say "Saved defaults to #{Edupage.config.path}."
+    end
+
+    # --- mcp-config helpers -------------------------------------------------------------
+
+    # stdio needs no token: the client owns the process, so there is nothing to
+    # authenticate. It is the better default for a local tool.
+    def stdio_entry
+      entry = { "command" => executable_path, "args" => ["mcp"] }
+
+      if bundler_gemfile
+        # Running from a checkout rather than an installed gem. Going through bundler
+        # with an absolute BUNDLE_GEMFILE is what makes this work from any directory -
+        # MCP clients start servers with a working directory of their own choosing.
+        entry["command"] = bundler_path
+        entry["args"] = ["exec", executable_path, "mcp"]
+        entry["env"] = { "BUNDLE_GEMFILE" => bundler_gemfile }
+      end
+
+      # The account is authentication, not a level of the chain, so pinning it is safe;
+      # school and student stay out on purpose, so the model has to choose them.
+      username = safe { Credentials.new(username: options[:username]).username }
+      entry["args"] += ["--username", username] if username
+      entry
+    end
+
+    def http_entry
+      host = options[:host] || Edupage.config.server["host"] || Server::DEFAULT_HOST
+      port = options[:port] || Edupage.config.server["port"] || Server::DEFAULT_PORT
+
+      {
+        "type" => "http",
+        "url" => "http://#{host}:#{port}/mcp",
+        "headers" => { "Authorization" => "Bearer #{Edupage.config.server_token}" }
+      }
+    end
+
+    def executable_path
+      File.expand_path($PROGRAM_NAME)
+    end
+
+    def bundler_gemfile
+      gemfile = ENV["BUNDLE_GEMFILE"]
+      return File.expand_path(gemfile) if gemfile && File.exist?(gemfile)
+
+      nil
+    end
+
+    def bundler_path
+      path = `which bundle 2>/dev/null`.strip
+      path.empty? ? "bundle" : path
+    end
+
+    # Builds the equivalent `claude mcp add` invocation, shell-quoted so it can be
+    # pasted or piped straight into a shell.
+    #
+    # The two transports take different shapes: stdio passes the subprocess after `--`,
+    # while HTTP takes a URL and repeatable --header flags.
+    def claude_add_command(name, entry)
+      parts = ["claude", "mcp", "add"]
+
+      if entry["type"] == "http"
+        parts += ["--transport", "http", name, entry["url"]]
+        entry.fetch("headers", {}).each { |key, value| parts += ["--header", "#{key}: #{value}"] }
+      else
+        entry.fetch("env", {}).each { |key, value| parts += ["-e", "#{key}=#{value}"] }
+        parts += [name, "--", entry["command"], *entry["args"]]
+      end
+
+      parts.map { |part| shell_quote(part) }.join(" ")
+    end
+
+    # Shellwords.escape is correct but backslash-escapes every `=` and space, which
+    # makes the line hard to read. Only what actually needs quoting gets quoted.
+    SHELL_SAFE = %r{\A[A-Za-z0-9_@%+=:,./-]+\z}
+
+    def shell_quote(part)
+      return part if part.match?(SHELL_SAFE)
+
+      "'#{part.gsub("'", %q('\''))}'"
+    end
+
+    def warn_mcp_placement(name, entry)
+      $stderr.puts <<~NOTES
+
+        Claude Code, in one step (add --scope user to make it available everywhere):
+          #{claude_add_command(name, entry)}
+
+        Or merge the object above into .mcp.json in a project, or ~/.claude.json.
+        Claude Desktop: merge into ~/Library/Application Support/Claude/claude_desktop_config.json
+      NOTES
+
+      return unless options[:http]
+
+      $stderr.puts <<~TOKEN
+
+        The token lives in #{Edupage.config.path}, and `edupage server` has to be running.
+      TOKEN
     end
 
     def keychain_status(username)
