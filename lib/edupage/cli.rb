@@ -82,15 +82,17 @@ module Edupage
       credentials = Credentials.new(username: options[:username], school: options[:school])
       username = safe { credentials.username }
 
-      say format_pair("username", username, credentials.username_source)
-      say format_pair("school", safe { credentials.school }, credentials.school_source)
-      say format_pair("password", credentials.password_source ? "(set)" : "(missing)", credentials.password_source)
+      say Table.plain([
+                        auth_row("username", username, credentials.username_source),
+                        auth_row("school", safe { credentials.school }, credentials.school_source),
+                        auth_row("password", credentials.password_source ? "(set)" : "(missing)",
+                                 credentials.password_source),
+                        auth_row("keychain", keychain_status(username), nil)
+                      ])
 
-      if credentials.password_shadowed?
-        say "  EDUPAGE_PASSWORD is set and overrides the keychain entry.", :yellow
-      end
+      return unless credentials.password_shadowed?
 
-      say "keychain : #{keychain_status(username)}"
+      say "EDUPAGE_PASSWORD is set and overrides the keychain entry.", :yellow
     end
 
     # --- session and cache ---------------------------------------------------------------
@@ -105,9 +107,8 @@ module Edupage
         entries = store.all(username)
         return say("No stored sessions for #{username}.") if entries.empty?
 
-        entries.each do |origin, entry|
-          say "#{origin.ljust(14)} #{entry[:userid]} saved #{entry[:saved_at]}"
-        end
+        rows = entries.map { |origin, entry| [origin, entry[:userid], "saved #{entry[:saved_at]}"] }
+        say Table.plain(rows)
       when "refresh"
         store.delete(username)
         account = Edupage.account(username: username, school: options[:school])
@@ -127,9 +128,11 @@ module Edupage
       case subcommand
       when "info"
         entries = store.entries
-        say "cache dir: #{store.root}"
-        say "entries  : #{entries.size}"
-        say "size     : #{entries.sum { |f| File.size(f) } / 1024} KiB"
+        say Table.plain([
+                          ["cache dir", ":", store.root],
+                          ["entries", ":", entries.size.to_s],
+                          ["size", ":", "#{entries.sum { |f| File.size(f) } / 1024} KiB"]
+                        ])
       when "clear"
         store.clear
         say "Cache cleared."
@@ -248,23 +251,21 @@ module Edupage
     # Shows which school, student and year the answer came from, so a list is never
     # ambiguous about whose it is.
     def chain_header(resource, context)
-      lines = resource.scope_chain.map do |level|
+      rows = resource.scope_chain.map do |level|
         case level
-        when :school then ["school", "#{context.school.origin}  (#{context.school.name})"]
-        when :student then ["student", context.student.to_s]
-        when :year then ["year", "#{context.year}#{context.year_defaulted? ? "  [default]" : ""}"]
+        when :school then ["school", ":", "#{context.school.origin}  (#{context.school.name})"]
+        when :student then ["student", ":", context.student.to_s]
+        when :year then ["year", ":", "#{context.year}#{context.year_defaulted? ? "  [default]" : ""}"]
         end
       end
 
-      width = lines.map { |label, _| label.length }.max
-      lines.map { |label, value| "#{label.ljust(width)} : #{value}" }.join("\n") + "\n"
+      "#{Table.plain(rows)}\n"
     end
 
     def choice_message(error)
-      width = error.candidates.map { |c| c[:id].to_s.length }.max
-      rows = error.candidates.map { |c| "  --#{error.level} #{c[:id].to_s.ljust(width)}  #{c[:label]}" }
+      rows = error.candidates.map { |c| ["--#{error.level}", c[:id].to_s, c[:label].to_s] }
 
-      "No #{error.level} selected. Pick one:\n#{rows.join("\n")}"
+      "No #{error.level} selected. Pick one:\n#{Table.plain(rows, indent: 2)}"
     end
 
     # In September the current year is empty and last year's data is what was meant, so
@@ -305,7 +306,8 @@ module Edupage
     end
 
     def formatter
-      Formatter.new(format: options[:json] ? :json : (options[:yaml] ? :yaml : :table))
+      Formatter.new(output: $stdout,
+                    format: options[:json] ? :json : (options[:yaml] ? :yaml : :table))
     end
 
     def require_keychain!
@@ -526,8 +528,8 @@ module Edupage
       Credentials::Keychain.new.stored?(username: username) ? "stored for #{username}" : "nothing stored for #{username}"
     end
 
-    def format_pair(label, value, source)
-      "#{label.ljust(9)}: #{value || "(missing)"}#{source ? "   [#{source}]" : ""}"
+    def auth_row(label, value, source)
+      [label, ":", value || "(missing)", source ? "[#{source}]" : ""]
     end
 
     def safe

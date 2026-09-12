@@ -43,8 +43,8 @@ Každá sa rozhoduje rovnako: explicitný výber vyhráva, jediná možnosť sa 
 ```
 $ edupage students
 No school selected. Pick one:
-  --school zsdemo   Základná škola Demo
-  --school zusdemo  Základná umelecká škola Demo
+  --school zsdemo  Základná škola Demo
+  --school zusdemo Základná umelecká škola Demo
 ```
 
 Default v configu sa **za výber nepočíta**: `default_school` hovorí len to, na ktorý
@@ -80,6 +80,23 @@ postačuje.
 
 Tabuľkový výstup má hlavičku s tým, z akej školy, študenta a roka dáta pochádzajú;
 `--json` a `--yaml` ju nemajú, aby zostali bajt na bajt zhodné s REST a MCP odpoveďami.
+
+```
+$ edupage grades --school zsdemo --student Jana --year 2025
+school  : zsdemo  (Základná škola Demo)
+student : Jana Nováková (4.A)
+year    : 2025/2026
+┌──────────────────┬───────────────────────────────┬───────┬────────┬─────────────────────────┐
+│ created at       │ subject                       │ value │ weight │ title                   │
+├──────────────────┼───────────────────────────────┼───────┼────────┼─────────────────────────┤
+│ 2025-09-13 10:53 │ Slovenský jazyk a literatúra  │ 1     │ 1.0    │ Čítanie                 │
+│ 2025-09-20 08:16 │ Matematika                    │ 1     │ 1.0    │ Sčítanie a odčítanie    │
+│                  │                               │       │        │ do 20 bez prechodu      │
+└──────────────────┴───────────────────────────────┴───────┴────────┴─────────────────────────┘
+```
+
+Tabuľka sa prispôsobí šírke terminálu: keď sa nezmestí, uberá sa vždy najširšiemu
+stĺpcu a dlhý text sa zalomí, takže dátumy a známky zostanú celé.
 
 Servisné príkazy: `edupage auth`, `edupage session status|refresh|logout`,
 `edupage cache info|clear`, `edupage config path|get|set`.

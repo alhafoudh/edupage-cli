@@ -7,16 +7,12 @@ module Edupage
     #
     # JSON and YAML go through Serializer, the same one the REST API and the MCP server
     # use, so `--json` output is byte-identical across surfaces. The table view is the
-    # only thing unique to the CLI.
+    # only thing unique to the CLI; Table draws it.
     class Formatter
-      # A single message body or noticeboard post can run to hundreds of characters,
-      # which would stretch one column past every terminal and make the table useless.
-      MAX_COLUMN_WIDTH = 60
-
-      def initialize(output: $stdout, format: :table, max_width: MAX_COLUMN_WIDTH)
+      def initialize(output: $stdout, format: :table, width: nil)
         @output = output
         @format = format
-        @max_width = max_width
+        @width = width || Table.terminal_width
       end
 
       def render(result, resource: nil)
@@ -38,7 +34,7 @@ module Edupage
 
         rows = records.map { |record| fields.map { |f| Serializer.field(record, f).to_s } }
         headers = fields.map { |f| Serializer.header(f) }
-        print_table(headers, rows)
+        @output.puts(Table.boxed(headers, rows, width: @width))
       end
 
       # Falls back to whatever the object reports, for resources with no table_fields.
@@ -47,35 +43,6 @@ module Edupage
 
         [:to_s]
       end
-
-      def print_table(headers, rows)
-        widths = headers.each_with_index.map do |header, index|
-          [[header.length, *rows.map { |row| width(row[index]) }].max, @max_width].min
-        end
-
-        @output.puts(format_row(headers, widths))
-        @output.puts(widths.map { |w| "-" * w }.join("  "))
-        rows.each { |row| @output.puts(format_row(row, widths)) }
-      end
-
-      def format_row(cells, widths)
-        cells.each_with_index
-             .map { |cell, i| pad(truncate(single_line(cell), widths[i]), widths[i]) }
-             .join("  ").rstrip
-      end
-
-      def truncate(value, width)
-        return value if value.length <= width
-
-        "#{value[0, width - 1]}…"
-      end
-
-      # Homework titles routinely contain newlines; a table row must stay one line.
-      def single_line(value) = value.to_s.gsub(/\s*\n\s*/, " / ")
-
-      def pad(value, width) = value + " " * [width - width(value), 0].max
-
-      def width(value) = single_line(value).length
 
       def deep_stringify(value)
         case value

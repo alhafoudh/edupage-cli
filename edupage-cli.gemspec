@@ -30,5 +30,9 @@ Gem::Specification.new do |spec|
   spec.add_dependency "puma", ">= 6.0"
   spec.add_dependency "sinatra", "~> 4.2"
   spec.add_dependency "thor", "~> 1.3"
+  # tty-table pulls tty-screen in itself; it is declared because TTY::Screen is
+  # called directly to size the terminal.
+  spec.add_dependency "tty-screen", "~> 0.8"
+  spec.add_dependency "tty-table", "~> 0.12"
   spec.add_dependency "zeitwerk", "~> 2.6"
 end
