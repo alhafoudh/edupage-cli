@@ -201,6 +201,14 @@ bundle exec rspec
 Testy bežia proti ručne písaným payloadom, nie proti nahratým stránkam: tie skutočné
 majú stovky kilobajtov a sú v nich mená cudzích detí.
 
+Keby predsa len vznikla VCR kazeta, `spec/support/cassette_scrubber.rb` z nej pred
+zápisom na disk vyhádže osobné údaje. Mená nezoberie z pevného zoznamu, ale **z odpovede
+samotnej** - z polí, kam ich Edupage vždy dáva - a potom nahradí každý ich výskyt vrátane
+tých vo voľnom texte správ. Pseudonym je odvodený z pôvodnej hodnoty, takže ten istý
+človek je v každej kazete ten istý vymyslený človek a krížové odkazy v payloade
+zostanú platné; späť sa z toho dostať nedá. Keďže slovenčina skloňuje, hľadá sa aj
+kmeň mena, takže zmiznú aj tvary ako `Janu` či `Kováčovej`, nielen základný tvar.
+
 CI beží na Ruby 3.2, 3.3 a 3.4 na Linuxe, plus jeden macOS job, ktorý si vytvorí vlastný
 odomknutý keychain, aby sa keychain testy naozaj spustili a nepreskočili.
 

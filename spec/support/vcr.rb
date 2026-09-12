@@ -1,6 +1,8 @@
 require "vcr"
 require "webmock/rspec"
 
+require_relative "cassette_scrubber"
+
 # Values that must never reach a committed cassette. Anything matching is replaced
 # with a placeholder at record time.
 VCR.configure do |config|
@@ -28,11 +30,17 @@ VCR.configure do |config|
   config.filter_sensitive_data("<SCHOOL>") { ENV["EDUPAGE_SCHOOL"]&.sub(/\.edupage\.org\z/, "") }
 
   config.before_record do |interaction|
-    body = interaction.request.body
-    next if body.nil? || body.empty?
+    request_body = interaction.request.body
+    unless request_body.nil? || request_body.empty?
+      interaction.request.body = request_body
+        .gsub(/(\bm=)[^&]*/, '\1<USERNAME>')
+        .gsub(/(\bh=)[^&]*/, '\1<PASSWORD>')
+    end
 
-    interaction.request.body = body
-      .gsub(/(\bm=)[^&]*/, '\1<USERNAME>')
-      .gsub(/(\bh=)[^&]*/, '\1<PASSWORD>')
+    # Recording happens against a live account, so the responses carry other people's
+    # children, their teachers and the school's name. They are replaced with stable
+    # pseudonyms before anything reaches disk - see CassetteScrubber.
+    interaction.response.body = CassetteScrubber.scrub(interaction.response.body)
+    interaction.request.body = CassetteScrubber.scrub(interaction.request.body)
   end
 end
