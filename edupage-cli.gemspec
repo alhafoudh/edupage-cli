@@ -6,10 +6,10 @@ Gem::Specification.new do |spec|
   spec.authors = ["Ahmed Al Hafoudh"]
   spec.email   = ["alhafoudh@freevision.sk"]
 
-  spec.summary     = "Read-only Ruby library, CLI, REST and MCP server for Edupage"
-  spec.description = "ActiveRecord-like access to Edupage (schools, students, timetables, " \
-                     "homeworks, grades) exposed identically through a Ruby API, a CLI, " \
-                     "a REST API and an MCP server."
+  spec.summary     = "Read-only prístup k Edupage: Ruby knižnica, CLI, REST API a MCP server"
+  spec.description = "ActiveRecord-like prístup k Edupage - školy, žiaci, rozvrhy, domáce " \
+                     "úlohy a známky - vystavený zhodne cez Ruby API, CLI, REST API " \
+                     "a MCP server. Iba na čítanie."
   spec.license  = "MIT"
   spec.homepage = "https://github.com/alhafoudh/edupage-cli"
 

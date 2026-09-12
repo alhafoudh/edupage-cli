@@ -54,6 +54,10 @@ RSpec.configure do |config|
   end
 
   config.filter_run_excluding(keychain: true) unless Edupage::Credentials::Keychain.available?
+
+  # Recording against the real account needs credentials and a network, so it only runs
+  # when asked for by tag.
+  config.filter_run_excluding(live: true)
 end
 
 def fixture(name)

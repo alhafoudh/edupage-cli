@@ -2,6 +2,10 @@
 # mise.toml.example is the template.
 /mise.toml
 
+# Recorded from a live account by spec/live_recording_spec.rb. It is anonymised before
+# it is written, but there is no reason to carry a real account's page shape around.
+/spec/cassettes/live_smoke.yml
+
 /.bundle/
 /vendor/bundle/
 /pkg/

@@ -202,12 +202,26 @@ Testy bežia proti ručne písaným payloadom, nie proti nahratým stránkam: ti
 majú stovky kilobajtov a sú v nich mená cudzích detí.
 
 Keby predsa len vznikla VCR kazeta, `spec/support/cassette_scrubber.rb` z nej pred
-zápisom na disk vyhádže osobné údaje. Mená nezoberie z pevného zoznamu, ale **z odpovede
+zápisom na disk vyhádže osobné údaje - mená, názvy škôl, subdomény aj e-maily, a to
+v tele odpovede, v URI aj v hlavičkách. Mená nezoberie z pevného zoznamu, ale **z odpovede
 samotnej** - z polí, kam ich Edupage vždy dáva - a potom nahradí každý ich výskyt vrátane
 tých vo voľnom texte správ. Pseudonym je odvodený z pôvodnej hodnoty, takže ten istý
 človek je v každej kazete ten istý vymyslený človek a krížové odkazy v payloade
 zostanú platné; späť sa z toho dostať nedá. Keďže slovenčina skloňuje, hľadá sa aj
 kmeň mena, takže zmiznú aj tvary ako `Janu` či `Kováčovej`, nielen základný tvar.
+
+Overiť sa to dá proti živému účtu:
+
+```bash
+EDUPAGE_LIVE_USERNAME=you@example.com EDUPAGE_LIVE_SCHOOL=yourschool \
+  bundle exec rspec spec/live_recording_spec.rb --tag live
+```
+
+Ten test si zoznam mien, ktoré sa v kazete nesmú objaviť, **načíta zo živého účtu**, nie
+z ručne napísaného zoznamu - spadne teda aj vtedy, keď pribudne spolužiak alebo druhá
+škola, ktorú scrubber nevie nájsť. Zároveň kontroluje, že sa kazeta uložila ako čitateľný
+text: Edupage servíruje stránky gzipnuté a komprimované telo by prešlo každou kontrolou
+na meno, hoci by v ňom boli všetky.
 
 CI beží na Ruby 3.2, 3.3 a 3.4 na Linuxe, plus jeden macOS job, ktorý si vytvorí vlastný
 odomknutý keychain, aby sa keychain testy naozaj spustili a nepreskočili.

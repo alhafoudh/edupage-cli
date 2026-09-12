@@ -29,6 +29,32 @@ module CassetteScrubber
   # ... the school's name.
   SCHOOL_FIELDS = %w[school_name schoolName].freeze
 
+  # The school's subdomain identifies it just as plainly as its name, and it is in every
+  # single URL. Edupage spells it out in these places.
+  # The last two matter for a parent whose children attend more than one school: the
+  # other schools appear only in the profile switcher, never as a URL or an ASC value.
+  ORIGIN_PATTERNS = [
+    /ASC\.edupage\s*=\s*"([a-z0-9-]+)"/i,
+    /\\?"edupage\\?"\s*:\s*\\?"([a-z0-9-]+)\\?"/,
+    %r{https?://([a-z0-9-]+)\.edupage\.org}i,
+    /edupage;([a-z0-9-]+);/,
+    /userEdupage\\?"\s*>\s*([a-z0-9-]+)\s*</
+  ].freeze
+
+  # Login names are e-mail addresses and appear in the page as well as in erid strings.
+  EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/
+
+  # Subdomains that are not a school.
+  RESERVED_ORIGINS = %w[login1 login2 www portal 404].freeze
+
+  # Generic words in a school's name. Everything else in it is the part that identifies
+  # the school, and is replaced word by word - free text abbreviates the name
+  # ("v ZŠ Jána Hollého"), so replacing only the full string leaves the telling half behind.
+  SCHOOL_STOPWORDS = %w[
+    základná stredná materská umelecká súkromná cirkevná spojená odborná internátna
+    škola školy školu školou gymnázium konzervatórium akadémia a s so pre
+  ].freeze
+
   # Display names that are groups rather than people; replacing them would only make
   # the cassette harder to read.
   GROUPS = ["Celá škola", "Administrátor", "Rodičia", "Žiaci"].freeze
@@ -43,17 +69,86 @@ module CassetteScrubber
   # Letters a Slovak ending can be made of, for the inflection pass below.
   ENDING = "[a-záäčďéíĺľňóôŕšťúýžA-ZÁÄČĎÉÍĹĽŇÓÔŔŠŤÚÝŽ]{0,3}".freeze
 
+  # Scrubs a whole VCR interaction under one mapping.
+  #
+  # The URI matters as much as the body: every request carries the school's subdomain,
+  # so a cassette whose bodies were cleaned but whose URLs still read
+  # https://realschool.edupage.org/... has not been anonymised at all.
+  def scrub_interaction(interaction)
+    # Headers count too: Host, Referer and Location all spell the school out, and a
+    # cassette is not anonymous while any of them does.
+    source = [
+      interaction.request.uri,
+      interaction.request.body,
+      interaction.response.body,
+      header_values(interaction.request.headers),
+      header_values(interaction.response.headers)
+    ].compact.map { |part| as_utf8(part) }.join("\n")
+
+    mapping = build_mapping(source)
+    return interaction if mapping.empty?
+
+    interaction.request.uri = apply(interaction.request.uri, mapping)
+    interaction.request.body = apply(interaction.request.body, mapping)
+    interaction.response.body = apply(interaction.response.body, mapping)
+    scrub_headers(interaction.request.headers, mapping)
+    scrub_headers(interaction.response.headers, mapping)
+    interaction
+  end
+
+  def header_values(headers)
+    return nil if headers.nil?
+
+    headers.values.flatten.compact.join("\n")
+  end
+
+  def scrub_headers(headers, mapping)
+    return if headers.nil?
+
+    headers.each_value do |values|
+      values.map! { |value| value.is_a?(String) ? apply(value, mapping) : value }
+    end
+  end
+
   def scrub(body)
     return body if body.nil? || body.empty?
 
-    mapping = build_mapping(body)
-    return body if mapping.empty?
+    apply(body, build_mapping(body))
+  end
+
+  def apply(text, mapping)
+    return text if text.nil? || text.empty? || mapping.empty?
+
+    # HTTP bodies arrive as binary, and the accented names here cannot be matched by a
+    # UTF-8 regexp against an ASCII-8BIT string.
+    text = as_utf8(text)
 
     # Longest first, so "Jana Nováková" is replaced before the bare "Jana" inside it.
-    text = mapping.keys.sort_by { |name| -name.length }
-                  .reduce(body) { |acc, name| acc.gsub(name, mapping[name]) }
+    # Anything long enough to be a name is matched regardless of case: the same word
+    # turns up shouted in a room label ("BELA (Hlavná budova)") as well as capitalised
+    # in the directory.
+    replaced = mapping.keys.sort_by { |name| -name.length }.reduce(text) do |acc, name|
+      name.length >= 4 ? acc.gsub(/#{Regexp.escape(name)}/i, mapping[name]) : acc.gsub(name, mapping[name])
+    end
 
-    scrub_inflections(text, mapping)
+    scrub_inflections(replaced, mapping)
+  end
+
+  # Raised rather than silently dropping bytes: a body this cannot read is a body it
+  # cannot anonymise, and writing it out regardless would put real names on disk in a
+  # form no leak check would spot.
+  class UnreadableBody < StandardError; end
+
+  def as_utf8(text)
+    return text if text.encoding == Encoding::UTF_8 && text.valid_encoding?
+
+    candidate = text.dup.force_encoding(Encoding::UTF_8)
+    return candidate if candidate.valid_encoding?
+
+    raise UnreadableBody,
+          "Cannot scrub a body that is not UTF-8 text (#{text.bytesize} bytes). " \
+          "If it is compressed, decompress it before recording; if it is binary, it " \
+          "must not be recorded at all."
   end
 
   # Slovak declines names, so a message body says "Pre Zoru" where the directory says
@@ -66,11 +161,16 @@ module CassetteScrubber
   def scrub_inflections(text, mapping)
     word_mapping(mapping).sort_by { |word, _| -word.length }.reduce(text) do |acc, (word, fake)|
       stem = stem_of(word)
-      next acc if stem.length < 4
+      next acc if stem.length < MIN_STEM
 
       acc.gsub(/\b#{Regexp.escape(stem)}#{ENDING}\b/, fake)
     end
   end
+
+  # Short enough to catch "Zoru" from "Zora" - a four-character floor would miss every
+  # short name, which is most of them. Over-scrubbing a word that merely shares a stem
+  # costs nothing here; under-scrubbing costs a name on disk.
+  MIN_STEM = 3
 
   # Full display names are harvested whole, so their parts would otherwise have no
   # entry of their own to inflect from.
@@ -96,7 +196,9 @@ module CassetteScrubber
 
     harvest(body, FIRST_NAME_FIELDS).each { |name| mapping[name] ||= first_name(name) }
     harvest(body, LAST_NAME_FIELDS).each { |name| mapping[name] ||= last_name(name) }
-    harvest(body, SCHOOL_FIELDS).each { |name| mapping[name] ||= school_name(name) }
+    harvest(body, SCHOOL_FIELDS).each { |name| add_school(name, mapping) }
+    harvest_origins(body).each { |origin| mapping[origin] ||= origin_name(origin) }
+    body.scan(EMAIL).uniq.each { |address| mapping[address] ||= email(address) }
 
     # The logged-in user's own name, which only userrow spells out.
     body.scan(USERROW).flatten.each do |row|
@@ -116,11 +218,27 @@ module CassetteScrubber
     mapping.reject { |name, _| name.strip.empty? }
   end
 
+  # Maps the identifying words of a school's name individually, then composes the full
+  # name from them, so "Základná škola Jána Hollého" and a later "ZŠ Jána Hollého" end up
+  # naming the same invented school.
+  def add_school(name, mapping)
+    words = name.split(/\s+/)
+
+    words.each do |word|
+      bare = word.gsub(/[^[:alpha:]]/, "")
+      next if bare.length < 3 || SCHOOL_STOPWORDS.include?(bare.downcase)
+
+      mapping[word] ||= school_word(word)
+    end
+
+    mapping[name] ||= words.map { |word| mapping[word] || word }.join(" ")
+  end
+
   def compose_name(name, mapping)
     words = name.split(/\s+/)
     return full_name(name) if words.size < 2
 
-    # Surnames are not always one word ("Al Hafoudh", "Kiss Nagyová"), so the split
+    # Surnames are not always one word ("Ben Omar", "Kiss Nagyová"), so the split
     # is chosen by what the directory already told us rather than assumed to be the
     # first space.
     (1...words.size).each do |index|
@@ -132,6 +250,12 @@ module CassetteScrubber
     words.each_with_index
          .map { |word, index| mapping[word] || (index.zero? ? first_name(word) : last_name(word)) }
          .join(" ")
+  end
+
+  def harvest_origins(body)
+    ORIGIN_PATTERNS.flat_map { |pattern| body.scan(pattern).flatten }
+                   .uniq
+                   .reject { |origin| origin.empty? || RESERVED_ORIGINS.include?(origin) }
   end
 
   # Values are read from both plain JSON and the JSON that Edupage embeds as an escaped
@@ -156,8 +280,16 @@ module CassetteScrubber
     with_seed(real) { "#{Faker::Name.first_name} #{Faker::Name.last_name}" }
   end
 
-  def school_name(real)
-    with_seed(real) { "Základná škola #{Faker::Address.city}" }
+  def school_word(real)
+    with_seed(real) { Faker::Address.city.gsub(/\s+/, "") }
+  end
+
+  def origin_name(real)
+    with_seed(real) { "zs#{Faker::Internet.domain_word.gsub(/[^a-z0-9]/, "")}" }
+  end
+
+  def email(real)
+    with_seed(real) { Faker::Internet.email(domain: "example.com") }
   end
 
   def with_seed(real)

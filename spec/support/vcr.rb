@@ -37,10 +37,15 @@ VCR.configure do |config|
         .gsub(/(\bh=)[^&]*/, '\1<PASSWORD>')
     end
 
+    # Edupage serves these pages gzipped. A compressed body cannot be scrubbed - and
+    # worse, it would sail past any check for a real name while still containing every
+    # one of them, so it is decompressed first and stored as text.
+    interaction.response.decompress if interaction.response.headers["Content-Encoding"]
+
     # Recording happens against a live account, so the responses carry other people's
-    # children, their teachers and the school's name. They are replaced with stable
-    # pseudonyms before anything reaches disk - see CassetteScrubber.
-    interaction.response.body = CassetteScrubber.scrub(interaction.response.body)
-    interaction.request.body = CassetteScrubber.scrub(interaction.request.body)
+    # children, their teachers, the school's name and its subdomain - the last one in
+    # every URL. All of it is replaced with stable pseudonyms before anything reaches
+    # disk; see CassetteScrubber.
+    CassetteScrubber.scrub_interaction(interaction)
   end
 end

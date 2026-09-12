@@ -37,7 +37,8 @@ RSpec.describe CassetteScrubber do
   end
 
   it "reaches names inside JSON escaped into a JSON string" do
-    expect(scrubbed).not_to include("Pre Zoru".sub("u", "")) # "Pre Terez"
+    # Slovak declines: the directory says "Zora", the homework says "Pre Zoru".
+    expect(scrubbed).not_to match(/Zor/)
     expect(scrubbed).to include('\\"ucitel_meno\\":')
   end
 
@@ -60,10 +61,10 @@ RSpec.describe CassetteScrubber do
   end
 
   it "handles a surname made of several words" do
-    # "Al Hafoudh", "Kiss Nagyová" - splitting on the first space would scatter
+    # "Ben Omar", "Kiss Nagyová" - splitting on the first space would scatter
     # the pupil into a different fake person than the directory has.
-    body = %({"dbi":{"students":{"1":{"firstname":"Jana","lastname":"Al Hafoudh"}}},) +
-           %("items":[{"user_meno":"Jana Al Hafoudh"}]})
+    body = %({"dbi":{"students":{"1":{"firstname":"Jana","lastname":"Ben Omar"}}},) +
+           %("items":[{"user_meno":"Jana Ben Omar"}]})
     parsed = JSON.parse(described_class.scrub(body))
     student = parsed.dig("dbi", "students", "1")
 
