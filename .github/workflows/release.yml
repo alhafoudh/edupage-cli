@@ -1,0 +1,83 @@
+name: Release
+
+# Publishes whatever version lib/edupage/version.rb names, once CI is green on main.
+# Bumping the version is the release trigger; a version that is already out is skipped,
+# so every other green push is a no-op.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # the tag and the GitHub release
+  id-token: write # trusted publishing to rubygems.org, no API key stored anywhere
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: release
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The commit CI actually tested, not whatever main points at by now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - name: Read the version
+        id: version
+        run: |
+          version=$(ruby -r ./lib/edupage/version -e 'print Edupage::VERSION')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      # Checked separately so a run that pushed the gem but failed before tagging can
+      # be retried and finish the job.
+      - name: Check what is already released
+        id: released
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if curl -fsS https://rubygems.org/api/v1/versions/edupage-cli.json 2>/dev/null \
+               | ruby -rjson -e 'exit(JSON.parse(STDIN.read).any? { |v| v["number"] == ENV["VERSION"] } ? 0 : 1)'; then
+            echo "rubygems=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "rubygems=false" >> "$GITHUB_OUTPUT"
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            echo "github=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "github=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the gem
+        if: steps.released.outputs.rubygems == 'false' || steps.released.outputs.github == 'false'
+        run: gem build edupage-cli.gemspec
+
+      - uses: rubygems/configure-rubygems-credentials@v2.1.0
+        if: steps.released.outputs.rubygems == 'false'
+
+      - name: Push to rubygems.org
+        if: steps.released.outputs.rubygems == 'false'
+        run: gem push "edupage-cli-${{ steps.version.outputs.version }}.gem"
+
+      - name: Tag and create the GitHub release
+        if: steps.released.outputs.github == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          gh release create "$TAG" "edupage-cli-${{ steps.version.outputs.version }}.gem" \
+            --target "$SHA" --title "$TAG" --generate-notes
