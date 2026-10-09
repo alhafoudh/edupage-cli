@@ -41,6 +41,22 @@ RSpec.describe "edupage mcp-config" do
       expect(File.absolute_path?(result["env"]["BUNDLE_GEMFILE"])).to be(true)
     end
 
+    it "prefers the entry point a packager names over its own path" do
+      # The Homebrew wrapper execs a versioned Cellar path; the opt path it names
+      # instead is the one that survives `brew upgrade`.
+      gemfile = ENV.delete("BUNDLE_GEMFILE")
+      ENV["EDUPAGE_EXECUTABLE"] = "/opt/homebrew/opt/edupage-cli/bin/edupage"
+
+      result = entry
+
+      expect(result["command"]).to eq("/opt/homebrew/opt/edupage-cli/bin/edupage")
+      expect(result["args"].first).to eq("mcp")
+      expect(result).not_to have_key("env")
+    ensure
+      ENV.delete("EDUPAGE_EXECUTABLE")
+      ENV["BUNDLE_GEMFILE"] = gemfile if gemfile
+    end
+
     it "carries no token, because stdio has nothing to authenticate" do
       expect(entry.to_s).not_to include("Bearer")
       expect(entry).not_to have_key("headers")

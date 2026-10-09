@@ -11,6 +11,14 @@ Credentials live in `mise.toml` (`EDUPAGE_SCHOOL`, `EDUPAGE_USERNAME`,
 `EDUPAGE_PASSWORD`, pulled from 1Password). Run commands through `mise exec -- ...`,
 otherwise the environment is missing.
 
+## Releasing
+
+Bumping `Edupage::VERSION` is the release trigger: `.github/workflows/release.yml`
+publishes the gem and the GitHub release, then bumps the formula in
+`alhafoudh/homebrew-edupage` through the `HOMEBREW_TAP_DEPLOY_KEY` deploy key
+(secret in the `release` environment). The Homebrew wrapper sets
+`EDUPAGE_EXECUTABLE`, which `mcp-config` registers instead of `$PROGRAM_NAME`.
+
 ## Hard rules
 
 - Read-only operations against Edupage only. Never write anything to the production

@@ -375,8 +375,10 @@ module Edupage
       }
     end
 
+    # Packagers that run edupage through a wrapper (the Homebrew formula) name the
+    # stable entry point here, so the registered path survives upgrades.
     def executable_path
-      File.expand_path($PROGRAM_NAME)
+      ENV["EDUPAGE_EXECUTABLE"] || File.expand_path($PROGRAM_NAME)
     end
 
     def bundler_gemfile

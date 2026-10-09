@@ -23,6 +23,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment: release
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
 
     steps:
       - uses: actions/checkout@v4
@@ -82,3 +85,46 @@ jobs:
         run: |
           gh release create "$TAG" "edupage-cli-${{ steps.version.outputs.version }}.gem" \
             --target "$SHA" --title "$TAG" --generate-notes
+
+  # Points the Homebrew formula at the released tag. Runs after every release run, even
+  # when nothing new was published, and only commits when the formula actually changes,
+  # so a missed bump is repaired by the next run or a manual dispatch.
+  homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: release
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: alhafoudh/homebrew-edupage
+          # A deploy key with write access to the tap and nothing else.
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+
+      - name: Point the formula at the release
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          url="https://github.com/alhafoudh/edupage-cli/archive/refs/tags/$TAG.tar.gz"
+          sha256=$(curl -fsSL "$url" | sha256sum | cut -d' ' -f1)
+          URL="$url" SHA256="$sha256" ruby -e '
+            path = "Formula/edupage-cli.rb"
+            formula = File.read(path)
+              .sub(/^  url ".*"$/, %(  url "#{ENV["URL"]}"))
+              .sub(/^  sha256 ".*"$/, %(  sha256 "#{ENV["SHA256"]}"))
+            File.write(path, formula)
+          '
+
+      - name: Commit and push
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          if git diff --quiet; then
+            echo "The formula already points at $VERSION."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "edupage-cli $VERSION"
+          git push

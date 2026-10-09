@@ -11,6 +11,26 @@ všetko rieši knižnica za teba.
 
 ## Inštalácia
 
+Cez Homebrew na macOS aj Linuxe:
+
+```bash
+brew install alhafoudh/edupage/edupage-cli
+edupage login
+```
+
+Formula žije v tape [alhafoudh/homebrew-edupage](https://github.com/alhafoudh/homebrew-edupage),
+stavia sa z otagovaného zdrojáku nad Ruby z Homebrew a gemy si drží pre seba, takže
+nezasahuje do žiadneho iného Ruby. Pri prvej inštalácii sa kompiluje zopár natívnych
+gemov (puma, nio4r), čo trvá pár desiatok sekúnd.
+
+Alebo ako gem, ak už Ruby 3.2+ máš:
+
+```bash
+gem install edupage-cli
+```
+
+Alebo priamo z checkoutu:
+
 ```bash
 bundle install
 bundle exec exe/edupage login
@@ -165,8 +185,12 @@ zdieľa viac klientov.
 Ani jeden variant nepripína školu ani študenta - to sú úrovne reťazca a model si ich má
 zvoliť pri každom volaní.
 
-Vygenerovaný stdio záznam používa absolútne cesty a nastavuje `BUNDLE_GEMFILE`, lebo MCP
-klienti spúšťajú servery z vlastného pracovného adresára. A spúšťajú ich aj **bez
+Vygenerovaný stdio záznam používa absolútne cesty a pri behu z checkoutu nastavuje
+`BUNDLE_GEMFILE`, lebo MCP klienti spúšťajú servery z vlastného pracovného adresára.
+Pri inštalácii cez Homebrew ukazuje na `$(brew --prefix)/opt/edupage-cli/bin/edupage`,
+nie na verziovanú cestu v `Cellar`, takže záznam prežije `brew upgrade`. Zariaďuje to
+premenná `EDUPAGE_EXECUTABLE`, ktorú nastavuje wrapper z formuly; rovnako ju môže
+použiť akýkoľvek iný balíčkovač. A spúšťajú ich aj **bez
 nastaveného locale**, čo je dôvod, prečo každý súbor otvárame explicitne ako UTF-8
 a nie cez `Encoding.default_external`.
 
@@ -242,6 +266,16 @@ na meno, hoci by v ňom boli všetky.
 
 CI beží na Ruby 3.2, 3.3 a 3.4 na Linuxe, plus jeden macOS job, ktorý si vytvorí vlastný
 odomknutý keychain, aby sa keychain testy naozaj spustili a nepreskočili.
+
+### Vydanie
+
+Vydanie spustí zmena `Edupage::VERSION` v `lib/edupage/version.rb`. Keď CI na `main`
+prejde, release workflow pushne gem na rubygems.org, vytvorí tag a GitHub release
+a nakoniec presmeruje formulu v tape
+[alhafoudh/homebrew-edupage](https://github.com/alhafoudh/homebrew-edupage) na nový tag
+(cez deploy key v secrete `HOMEBREW_TAP_DEPLOY_KEY`). Tap má vlastné CI, ktoré formulu
+postaví a otestuje na macOS (arm64, Intel) aj Linuxe (x64, arm64). Každý krok je
+idempotentný, takže zlyhaný beh stačí spustiť znova.
 
 ## Rozsah
 
