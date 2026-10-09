@@ -12,7 +12,6 @@ module Edupage
       class WindowsCredentialManager < SystemAdapter
         CRED_TYPE_GENERIC = 1
         CRED_PERSIST_LOCAL_MACHINE = 2
-        ERROR_NOT_FOUND = 1168
 
         class << self
           def available? = Gem.win_platform?
@@ -106,12 +105,16 @@ module Edupage
           raise Error, "Failed to store password in #{display_name} (Win32 error #{Fiddle.win32_last_error})"
         end
 
+        # Whether there is anything to remove is checked up front rather than read off
+        # ERROR_NOT_FOUND (1168): on Windows arm64 with Ruby 4.0, Fiddle reports the last error
+        # as 0 after a failed CredDeleteW.
         def remove(username)
+          return false unless stored?(username: username)
+
           api = self.class.api
           return true unless api.CredDeleteW(wide(target_name(username)), CRED_TYPE_GENERIC, 0).zero?
-          return false if Fiddle.win32_last_error == ERROR_NOT_FOUND
 
-          raise Error, "Failed to remove password from #{display_name} (Win32 error #{Fiddle.win32_last_error})"
+          raise Error, "Failed to remove password from #{display_name} (Win32 error #{Fiddle.win32_last_error.inspect})"
         end
 
         # A NUL-terminated UTF-16LE copy of +str+, as the W functions expect.
