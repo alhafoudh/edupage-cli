@@ -37,11 +37,13 @@ jobs:
           bundle config set --local build.nokogiri --use-system-libraries
           bundle install --jobs 4
 
-      # The keychain provider is macOS-only and full of sharp edges worth testing for
-      # real (security hex-encodes non-ASCII passwords and exits 0 on a mismatched
-      # write). A dedicated unlocked keychain keeps that off the runner's login one and
-      # avoids depending on how it happens to be configured. Elsewhere the keychain
-      # specs exclude themselves.
+      # Each OS credential store adapter is tested against the real store on its own
+      # platform; the others exclude themselves. The stores are full of sharp edges
+      # worth testing for real (security hex-encodes non-ASCII passwords and exits 0 on
+      # a mismatched write).
+      #
+      # macOS: a dedicated unlocked keychain keeps the specs off the runner's login one
+      # and avoids depending on how it happens to be configured.
       - name: Create a scratch keychain
         if: runner.os == 'macOS'
         run: |
@@ -50,9 +52,26 @@ jobs:
           security unlock-keychain -p "" spec.keychain
           security set-keychain-settings spec.keychain
 
+      # Linux: secret-tool needs a Secret Service on a D-Bus session, which the runner
+      # does not have. gnome-keyring provides one for the lifetime of the rspec run. The
+      # throwaway password must not be empty: with an empty one --unlock never creates
+      # the login collection and every store fails with "Object does not exist". Windows needs nothing: the runner user has a
+      # Credential Manager of its own.
+      - name: Install a Secret Service
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gnome-keyring libsecret-tools dbus-x11
+
       # The suite never touches the network: WebMock blocks it and the VCR cassettes
       # are :none.
-      - run: bundle exec rspec
+      - if: runner.os != 'Linux'
+        run: bundle exec rspec
+
+      - if: runner.os == 'Linux'
+        run: |
+          dbus-run-session -- sh -c '
+            printf spec | gnome-keyring-daemon --unlock --components=secrets >/dev/null &&
+            bundle exec rspec
+          '
 
   read-only:
     name: no write endpoints

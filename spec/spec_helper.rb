@@ -7,6 +7,7 @@ require "edupage/cli"
 require_relative "support/vcr"
 require_relative "support/payloads"
 require_relative "support/fake_session"
+require_relative "support/system_credential_adapter"
 
 RSpec.configure do |config|
   config.expect_with(:rspec) { |c| c.syntax = :expect }
@@ -49,11 +50,17 @@ RSpec.configure do |config|
     )
   end
 
-  config.define_derived_metadata(file_path: %r{/keychain}) do |meta|
-    meta[:keychain] = true
-  end
+  # Each OS credential store adapter is tested against the real store, so its spec only
+  # runs on the platform that has it.
+  Edupage::Credentials::SYSTEM_ADAPTERS.each do |adapter|
+    file = adapter.name.split("::").last.gsub(/(?<!\A)([A-Z])/, '_\1').downcase
+    tag = :"#{file}_store"
 
-  config.filter_run_excluding(keychain: true) unless Edupage::Credentials::Keychain.available?
+    config.define_derived_metadata(file_path: %r{/credentials/adapters/#{file}_spec\.rb\z}) do |meta|
+      meta[tag] = true
+    end
+    config.filter_run_excluding(tag => true) unless adapter.available?
+  end
 
   # Unix file modes and fork do not exist on Windows; NTFS ACLs on the user profile are
   # what protect the files there.

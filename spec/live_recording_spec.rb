@@ -14,7 +14,7 @@ require "edupage"
 RSpec.describe "recording a cassette", :live do
   let(:username) { ENV.fetch("EDUPAGE_LIVE_USERNAME") }
   let(:school) { ENV.fetch("EDUPAGE_LIVE_SCHOOL") }
-  let(:password) { Edupage::Credentials::Keychain.new.password(username: username) }
+  let(:password) { Edupage::Credentials.system_adapter.password(username: username) }
   let(:cassette) { File.join(VCR.configuration.cassette_library_dir, "live_smoke.yml") }
 
   # Room and building labels are neither people nor schools, and blanking them would

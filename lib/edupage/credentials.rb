@@ -1,25 +1,39 @@
 module Edupage
-  # Resolves username / password / school from an ordered list of providers.
+  # Resolves username / password / school from credential adapters.
   #
-  # ENV always wins over the keychain. That ordering is deliberate but surprising
-  # (an `edupage login` looks like a no-op while EDUPAGE_PASSWORD is exported), so
-  # #password_source is reported by `edupage auth status`.
+  # ENV wins over everything. When it supplies a value nothing else is consulted, and the
+  # operating system's credential store in particular is never touched: no keychain
+  # prompt, no subprocess, no FFI load. That store is looked up lazily and only as the
+  # last resort for the password. Username and school fall back to --username/--school
+  # and then config instead.
   class Credentials
     Resolved = Struct.new(:value, :source, keyword_init: true)
 
+    # Tried in order; the first one available on this machine is the system store.
+    SYSTEM_ADAPTERS = [
+      Adapters::MacosKeychain,
+      Adapters::WindowsCredentialManager,
+      Adapters::SecretService
+    ].freeze
+
+    class << self
+      # The credential store of this operating system, or nil when there is none.
+      def system_adapter
+        SYSTEM_ADAPTERS.find(&:available?)&.new
+      end
+    end
+
     attr_reader :username_override, :school_override
 
-    def initialize(username: nil, school: nil, providers: nil, config: Edupage.config)
+    # +system+ is a callable rather than an adapter so that building Credentials never
+    # touches the store; it is called at most once, and only when ENV has no password.
+    def initialize(username: nil, school: nil, env: Adapters::Env.new,
+                   system: -> { Credentials.system_adapter }, config: Edupage.config)
       @username_override = username
       @school_override = school
       @config = config
-      @providers = providers || default_providers
-    end
-
-    def default_providers
-      [Credentials::Env.new].tap do |list|
-        list << Credentials::Keychain.new if Credentials::Keychain.available?
-      end
+      @env = env
+      @system = system
     end
 
     def username
@@ -41,20 +55,9 @@ module Edupage
     def password_source = resolved_password.source
     def school_source   = resolved_school.source
 
-    # True when ENV supplies the password while a lower-priority provider also holds
-    # one, i.e. a stored password is being silently shadowed. Providers are compared by
-    # the source they report rather than by class, so any provider chain works.
-    def password_shadowed?
-      winning = resolved_password.source
-      return false unless winning&.start_with?("ENV:")
-
-      user = resolved_username.value
-      @providers.any? do |provider|
-        next false if provider.source_for(:password) == winning
-
-        value = provider.password(username: user)
-        value && !value.empty?
-      end
+    # True when ENV supplies the password, i.e. the system store is not consulted.
+    def password_from_env?
+      !from(@env, :password).nil?
     end
 
     def to_h
@@ -68,37 +71,39 @@ module Edupage
     private
 
     def resolved_username
-      @resolved_username ||= begin
-        from_providers(:username) ||
-          wrap(@username_override, "--username") ||
-          wrap(@config.default_username, "config") ||
-          Resolved.new(value: nil, source: nil)
-      end
+      @resolved_username ||=
+        from(@env, :username) ||
+        wrap(@username_override, "--username") ||
+        wrap(@config.default_username, "config") ||
+        Resolved.new(value: nil, source: nil)
     end
 
     def resolved_password
       @resolved_password ||=
-        from_providers(:password, username: resolved_username.value) ||
+        from(@env, :password) ||
+        from(system_adapter, :password, username: resolved_username.value) ||
         Resolved.new(value: nil, source: nil)
     end
 
     def resolved_school
-      @resolved_school ||= begin
-        from_providers(:school) ||
-          wrap(@school_override, "--school") ||
-          wrap(@config.default_school, "config") ||
-          Resolved.new(value: nil, source: nil)
-      end
+      @resolved_school ||=
+        from(@env, :school) ||
+        wrap(@school_override, "--school") ||
+        wrap(@config.default_school, "config") ||
+        Resolved.new(value: nil, source: nil)
     end
 
-    # An override beats a lower-priority provider but never beats ENV, so overrides are
-    # only consulted after the provider chain comes up empty.
-    def from_providers(field, **args)
-      @providers.each do |provider|
-        value = provider.public_send(field, **args)
-        return Resolved.new(value: value, source: provider.source_for(field)) if value && !value.empty?
-      end
-      nil
+    def system_adapter
+      return @system_adapter if defined?(@system_adapter)
+
+      @system_adapter = @system.call
+    end
+
+    def from(adapter, field, **args)
+      return nil unless adapter
+
+      value = adapter.public_send(field, **args)
+      Resolved.new(value: value, source: adapter.source_for(field)) if value && !value.empty?
     end
 
     def wrap(value, source)
@@ -108,10 +113,10 @@ module Edupage
     end
 
     def missing_password_message
-      if Credentials::Keychain.available?
-        "No password. Run `edupage login`, or set EDUPAGE_PASSWORD."
+      if (adapter = system_adapter)
+        "No password. Run `edupage login` to store it in the #{adapter.display_name}, or set EDUPAGE_PASSWORD."
       else
-        "No password and the macOS keychain is unavailable on this platform. Set EDUPAGE_PASSWORD."
+        "No password and no OS credential store is available on #{RUBY_PLATFORM}. Set EDUPAGE_PASSWORD."
       end
     end
   end

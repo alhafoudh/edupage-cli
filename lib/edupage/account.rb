@@ -111,7 +111,7 @@ module Edupage
       { username: username, name: name, schools: schools.map(&:origin) }
     end
 
-    # Forgets the stored sessions. The keychain password is untouched.
+    # Forgets the stored sessions. The stored password is untouched.
     def logout!
       @store.delete(username)
     end
