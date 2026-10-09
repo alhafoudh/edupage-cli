@@ -1,13 +1,13 @@
 # edupage-cli
 
 Read-only prístup k účtu na [Edupage](https://www.edupage.org) - ako Ruby knižnica, CLI,
-REST API a MCP server. Všetky štyri povrchy stoja na tom istom kóde a drží ich v súlade
-parity test.
+REST API a MCP server. Všetky štyri rozhrania používajú rovnaký kód a ich zhodu
+stráži parity test.
 
-Edupage nemá verejné API. Každá stránka je server-rendered HTML s JSON-om zabaleným
-v `<script>` blokoch a session si navyše drží skryté kurzory "aktuálne dieťa" a
-"aktuálny školský rok", ktoré treba nastaviť skôr, než má fetch vôbec zmysel. Toto
-všetko rieši knižnica za teba.
+Edupage nemá verejné API. Každá stránka je HTML vygenerované na serveri s JSON-om
+vloženým do blokov `<script>`. Session si navyše interne pamätá "aktuálne dieťa"
+a "aktuálny školský rok", ktoré treba nastaviť pred načítaním dát. Toto všetko
+rieši knižnica za teba.
 
 ## Inštalácia
 
@@ -18,9 +18,9 @@ brew install alhafoudh/edupage/edupage-cli
 edupage login
 ```
 
-Formula žije v tape [alhafoudh/homebrew-edupage](https://github.com/alhafoudh/homebrew-edupage),
-stavia sa z otagovaného zdrojáku nad Ruby z Homebrew a gemy si drží pre seba, takže
-nezasahuje do žiadneho iného Ruby. Pri prvej inštalácii sa kompiluje zopár natívnych
+Formula je v tape [alhafoudh/homebrew-edupage](https://github.com/alhafoudh/homebrew-edupage).
+Zostavuje sa zo zdrojového kódu označeného tagom, používa Ruby z Homebrew a gemy si
+ukladá oddelene, takže nezasahuje do ostatných inštalácií Ruby. Pri prvej inštalácii sa kompiluje zopár natívnych
 gemov (puma, nio4r), čo trvá pár desiatok sekúnd.
 
 Alebo ako gem, ak už Ruby 3.2+ máš:
@@ -36,10 +36,10 @@ bundle install
 bundle exec exe/edupage login
 ```
 
-`login` heslo najprv overí voči Edupage a až potom ho uloží do macOS keychainu, takže
-sa tam nikdy nedostane preklep.
+`login` najprv overí heslo prihlásením do Edupage a až potom ho uloží do macOS
+keychainu, takže heslo s preklepom neuloží.
 
-## Credentials
+## Prihlasovacie údaje
 
 Hľadajú sa v tomto poradí:
 
@@ -48,17 +48,18 @@ Hľadajú sa v tomto poradí:
 | 1 | `EDUPAGE_USERNAME`, `EDUPAGE_PASSWORD`, `EDUPAGE_SCHOOL` |
 | 2 | macOS keychain (service `edupage-cli`), cez `edupage login` |
 
-`edupage auth` ukáže, ktorý zdroj sa práve používa, a upozorní, keď `EDUPAGE_PASSWORD`
-prekrýva heslo v keychaine - inak by to vyzeralo, že `edupage login` nič neurobil.
+`edupage auth` ukáže, ktorý zdroj sa práve používa, a upozorní, keď má `EDUPAGE_PASSWORD`
+prednosť pred heslom v keychaine - inak by to vyzeralo, že `edupage login` nič neurobil.
 
-Netajné nastavenia sú v `~/.config/edupage-cli/config.yml`, session a cache stránok
+Nastavenia bez citlivých údajov sú v `~/.config/edupage-cli/config.yml`, session a cache stránok
 v `~/.cache/edupage-cli/`.
 
-## Reťazec
+## Hierarchia výberu
 
-Všetko visí na `account > škola > študent > ročník` a žiadna úroveň sa nedá preskočiť.
-Každá sa rozhoduje rovnako: explicitný výber vyhráva, jediná možnosť sa vezme ticho,
-čokoľvek iné skončí chybou so zoznamom možností.
+Výber sa riadi hierarchiou `account > škola > študent > školský rok` a žiadna úroveň
+sa nedá preskočiť. Na každej úrovni platí rovnaké pravidlo: prednosť má explicitný
+výber, jediná možnosť sa vyberie automaticky a v ostatných prípadoch príkaz skončí
+chybou so zoznamom možností.
 
 ```
 $ edupage students
@@ -67,11 +68,12 @@ No school selected. Pick one:
   --school zusdemo Základná umelecká škola Demo
 ```
 
-Default v configu sa **za výber nepočíta**: `default_school` hovorí len to, na ktorý
-`*.edupage.org` host sa prihlásiť, nikdy nie to, čie dáta čítaš.
+Predvolená hodnota v configu sa **za výber nepočíta**: `default_school` určuje iba
+server `*.edupage.org`, na ktorý sa prihlásiť, nie to, čie dáta čítaš.
 
-Jedinou výnimkou je ročník - ten sa doplní na aktuálny, lebo "teraz" je jednoznačné.
-Výstup vždy povie, ktorý rok použil, a keď je prázdny, ukáže, kde dáta sú:
+Jedinou výnimkou je školský rok - automaticky sa vyberie aktuálny, lebo "teraz" je
+jednoznačné. Vo výstupe je vždy uvedené, ktorý rok sa použil, a ak preň nie sú žiadne
+dáta, výstup ukáže, v ktorých rokoch sú:
 
 ```
 $ edupage grades --school zsdemo --student Jana
@@ -98,8 +100,9 @@ Globálne prepínače: `--school --student --year --username --json --yaml --no-
 --verbose`. Meno študenta stačí zadať ako unikátny prefix, takže `--student Jana`
 postačuje.
 
-Tabuľkový výstup má hlavičku s tým, z akej školy, študenta a roka dáta pochádzajú;
-`--json` a `--yaml` ju nemajú, aby zostali bajt na bajt zhodné s REST a MCP odpoveďami.
+Tabuľkový výstup má hlavičku s údajmi o škole, študentovi a školskom roku. Výstupy
+`--json` a `--yaml` hlavičku nemajú, aby boli bajt po bajte zhodné s odpoveďami REST API
+a MCP.
 
 ```
 $ edupage grades --school zsdemo --student Jana --year 2025
@@ -115,8 +118,8 @@ year    : 2025/2026
 └──────────────────┴───────────────────────────────┴───────┴────────┴─────────────────────────┘
 ```
 
-Tabuľka sa prispôsobí šírke terminálu: keď sa nezmestí, uberá sa vždy najširšiemu
-stĺpcu a dlhý text sa zalomí, takže dátumy a známky zostanú celé.
+Tabuľka sa prispôsobí šírke terminálu: keď sa nezmestí, vždy sa zúži najširší
+stĺpec a dlhý text sa zalomí, takže dátumy a známky zostanú celé.
 
 Servisné príkazy: `edupage auth`, `edupage session status|refresh|logout`,
 `edupage cache info|clear`, `edupage config path|get|set`.
@@ -139,8 +142,9 @@ jana.grades                                     # skratka pre aktuálny rok
 ```
 
 Kolekcie sú lazy a reťaziteľné: `where order limit offset find_by first count`.
-`where(name: ...)` hľadá naprieč menom, skratkou aj id záznamu; každý iný kľúč porovnáva
-svoj atribút a berie hodnotu, regexp, range, pole alebo lambdu.
+`where(name: ...)` hľadá v mene, skratke aj id záznamu; pri ostatných kľúčoch sa
+porovnáva príslušný atribút. Ako podmienku možno zadať hodnotu, regulárny výraz, rozsah,
+pole alebo lambdu.
 
 ## Server
 
@@ -150,7 +154,7 @@ edupage mcp               # MCP cez stdio, pre editory a desktop klientov
 ```
 
 Počúva na `127.0.0.1` a pri prvom spustení si vygeneruje bearer token do configu.
-Všetky rúty sú `GET`, všetky MCP tooly sú označené ako read-only.
+Všetky trasy sú `GET`, všetky MCP tooly sú označené ako read-only.
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \
@@ -160,7 +164,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 ### Zapojenie MCP
 
 `edupage mcp-add` zaregistruje server u klienta, `edupage mcp-config` iba vypíše
-`mcpServers` záznam, keď si ho chceš umiestniť sám.
+záznam `mcpServers`, ak si ho chceš do configu pridať ručne.
 
 ```bash
 edupage mcp-add claude-code --scope user    # cez `claude mcp add`
@@ -173,30 +177,30 @@ edupage mcp-config                          # len JSON a nič iné
 edupage mcp-config --http
 ```
 
-Pridávanie je **idempotentné**: zhodný záznam nechá tak, odlišný zosúladí a chýbajúci
+Pridávanie je **idempotentné**: zhodný záznam ponechá, odlišný upraví a chýbajúci
 doplní. Config Claude Desktopu sa zlučuje, nie prepisuje - ostatné servery aj nesúvisiace
 nastavenia zostanú - a predošlá verzia sa odloží ako `.bak`.
 
-Pre lokálny nástroj je lepší default stdio: proces vlastní klient, takže netreba nič
-autentifikovať ani držať bežiaci server. `--http` mieri na `/mcp` bežiaceho
-`edupage server` a nesie token v `Authorization` hlavičke, čo sa hodí, keď jeden proces
-zdieľa viac klientov.
+Pre lokálny nástroj je lepšie predvolené stdio: proces spravuje klient, takže netreba
+riešiť autentifikáciu ani udržiavať server v chode. `--http` sa pripája na `/mcp`
+spusteného `edupage server` a posiela token v hlavičke `Authorization`, čo sa hodí, keď
+jeden proces zdieľa viac klientov.
 
-Ani jeden variant nepripína školu ani študenta - to sú úrovne reťazca a model si ich má
-zvoliť pri každom volaní.
+Ani jeden variant nenastavuje školu ani študenta napevno - sú to úrovne hierarchie
+a model si ich má zvoliť pri každom volaní.
 
 Vygenerovaný stdio záznam používa absolútne cesty a pri behu z checkoutu nastavuje
 `BUNDLE_GEMFILE`, lebo MCP klienti spúšťajú servery z vlastného pracovného adresára.
 Pri inštalácii cez Homebrew ukazuje na `$(brew --prefix)/opt/edupage-cli/bin/edupage`,
-nie na verziovanú cestu v `Cellar`, takže záznam prežije `brew upgrade`. Zariaďuje to
+nie na verziovanú cestu v `Cellar`, takže záznam zostane platný aj po `brew upgrade`. Zariaďuje to
 premenná `EDUPAGE_EXECUTABLE`, ktorú nastavuje wrapper z formuly; rovnako ju môže
-použiť akýkoľvek iný balíčkovač. A spúšťajú ich aj **bez
-nastaveného locale**, čo je dôvod, prečo každý súbor otvárame explicitne ako UTF-8
-a nie cez `Encoding.default_external`.
+použiť akýkoľvek iný balíčkovač. MCP klienti navyše spúšťajú servery aj **bez
+nastaveného locale**, preto každý súbor otvárame výslovne ako UTF-8 a nespoliehame sa
+na `Encoding.default_external`.
 
-## Ako povrchy zostávajú v súlade
+## Ako udržiavame rozhrania v súlade
 
-Resources sú deklarované raz, v `lib/edupage/registry/resources.rb`:
+Zdroje sú deklarované na jednom mieste, v `lib/edupage/registry/resources.rb`:
 
 ```ruby
 resource :grades do
@@ -207,31 +211,34 @@ resource :grades do
 end
 ```
 
-Z toho sa vygeneruje CLI príkaz, REST rúta aj MCP tool a `spec/registry_parity_spec.rb`
-spadne, ak niektorý chýba alebo sa mu rozídu parametre. Výstup `--json`, telo REST
+Z toho sa vygeneruje CLI príkaz, REST trasa aj MCP tool a `spec/registry_parity_spec.rb`
+spadne, ak niektorý z nich chýba alebo má odlišné parametre. Výstup `--json`, telo REST
 odpovede aj výsledok MCP toolu idú cez jeden serializer, takže sú bajt na bajt zhodné.
 
-`scope` zároveň deklaruje, na ktorých úrovniach reťazca resource stojí, takže ho všetky
-tri povrchy vynucujú rovnako: REST ich nesie ako segmenty cesty, MCP input schéma ich
-označí ako required a CLI odmietne so zoznamom možností.
+`scope` zároveň určuje, ktoré úrovne hierarchie zdroj vyžaduje, a všetky tri rozhrania
+ich vyžadujú rovnako: v REST sú súčasťou cesty, vstupná schéma MCP ich označí ako povinné
+a CLI príkaz bez nich odmietne a vypíše zoznam možností.
 
 ## Poznámky k samotnému Edupage
 
-Veci, ktoré stojí za to vedieť - všetky overené proti živému účtu:
+Veci, ktoré stojí za to vedieť - všetky overené na živom účte:
 
-- **Jeden login môže pokrývať viac škôl.** `mauth` vráti jednu session na každú školu.
-- **Session drží aktuálne dieťa a aktuálny školský rok.** Prepnutie ktoréhokoľvek z nich
-  je side effect na zdieľanom stave servera, takže prebieha pod file lockom a každá
-  odpoveď sa kontroluje proti tomu, čo sa pýtalo.
-- **Tieto prepnutia zaostávajú.** Edupage prepnutie potvrdí okamžite, ale ešte request
-  alebo dva servíruje stránku predošlého dieťaťa či roka, takže sa fetch opakuje, kým sa
-  stránka nezhoduje. Vrátiť zaostávajúcu stránku by potichu znamenalo rozvrh iného dieťaťa.
+- **Jedným účtom sa dá prihlásiť do viacerých škôl.** `mauth` vráti jednu session na
+  každú školu.
+- **Session drží aktuálne dieťa a aktuálny školský rok.** Prepnutie dieťaťa aj roka mení
+  zdieľaný stav na serveri, preto prebieha pod súborovým zámkom a pri každej odpovedi sa
+  overuje, či zodpovedá požadovanému dieťaťu a roku.
+- **Prepnutie sa prejaví s oneskorením.** Edupage prepnutie potvrdí okamžite, ale ešte
+  request alebo dva vracia stránku predošlého dieťaťa či roka, takže sa fetch opakuje,
+  kým stránka nesedí. Ak by sa vrátila neaktuálna stránka, dostal by si bez upozornenia
+  rozvrh iného dieťaťa.
 - **Číselníky sa medzi rokmi menia.** Zoznam tried za 2025 nie je ten istý ako za 2026,
   preto je rok súčasťou každého cache kľúča.
 - **Timeline je spoločná pre všetky deti rodiča** a delí sa lokálne podľa mapy
   `childGroups`.
-- **Domáce úlohy majú dva tvary** - zadané triede alebo jednému žiakovi. Treba oba: na
-  účte, na ktorom to vzniklo, je 15 zo 16 úloh jedného dieťaťa toho druhého druhu.
+- **Domáce úlohy sa zadávajú buď celej triede, alebo jednotlivým žiakom.** Treba
+  podporovať oba prípady: na účte, na ktorom to vzniklo, je 15 zo 16 úloh jedného
+  dieťaťa zadaných individuálne.
 
 ## Vývoj
 
@@ -239,16 +246,16 @@ Veci, ktoré stojí za to vedieť - všetky overené proti živému účtu:
 bundle exec rspec
 ```
 
-Testy bežia proti ručne písaným payloadom, nie proti nahratým stránkam: tie skutočné
+Testy používajú ručne pripravené payloady, nie uložené stránky: tie skutočné
 majú stovky kilobajtov a sú v nich mená cudzích detí.
 
 Keby predsa len vznikla VCR kazeta, `spec/support/cassette_scrubber.rb` z nej pred
-zápisom na disk vyhádže osobné údaje - mená, názvy škôl, subdomény aj e-maily, a to
-v tele odpovede, v URI aj v hlavičkách. Mená nezoberie z pevného zoznamu, ale **z odpovede
-samotnej** - z polí, kam ich Edupage vždy dáva - a potom nahradí každý ich výskyt vrátane
+zápisom na disk odstráni osobné údaje - mená, názvy škôl, subdomény aj e-maily, a to
+v tele odpovede, v URI aj v hlavičkách. Mená neberie z pevného zoznamu, ale **priamo
+z odpovede** - z polí, kam ich Edupage vždy dáva - a potom nahradí každý ich výskyt vrátane
 tých vo voľnom texte správ. Pseudonym je odvodený z pôvodnej hodnoty, takže ten istý
-človek je v každej kazete ten istý vymyslený človek a krížové odkazy v payloade
-zostanú platné; späť sa z toho dostať nedá. Keďže slovenčina skloňuje, hľadá sa aj
+človek má v každej kazete rovnaký pseudonym a vzájomné odkazy v payloade zostanú
+platné; pôvodnú hodnotu sa z pseudonymu spätne získať nedá. Keďže slovenčina skloňuje, hľadá sa aj
 kmeň mena, takže zmiznú aj tvary ako `Janu` či `Kováčovej`, nielen základný tvar.
 
 Overiť sa to dá proti živému účtu:
@@ -261,8 +268,8 @@ EDUPAGE_LIVE_USERNAME=you@example.com EDUPAGE_LIVE_SCHOOL=yourschool \
 Ten test si zoznam mien, ktoré sa v kazete nesmú objaviť, **načíta zo živého účtu**, nie
 z ručne napísaného zoznamu - spadne teda aj vtedy, keď pribudne spolužiak alebo druhá
 škola, ktorú scrubber nevie nájsť. Zároveň kontroluje, že sa kazeta uložila ako čitateľný
-text: Edupage servíruje stránky gzipnuté a komprimované telo by prešlo každou kontrolou
-na meno, hoci by v ňom boli všetky.
+text: Edupage posiela stránky gzipnuté a kontrola mien by v komprimovanom tele nič
+nenašla, hoci by v ňom všetky mená zostali.
 
 CI beží na Ruby 3.2, 3.3 a 3.4 na Linuxe, plus jeden macOS job, ktorý si vytvorí vlastný
 odomknutý keychain, aby sa keychain testy naozaj spustili a nepreskočili.
@@ -271,7 +278,7 @@ odomknutý keychain, aby sa keychain testy naozaj spustili a nepreskočili.
 
 Vydanie spustí zmena `Edupage::VERSION` v `lib/edupage/version.rb`. Keď CI na `main`
 prejde, release workflow pushne gem na rubygems.org, vytvorí tag a GitHub release
-a nakoniec presmeruje formulu v tape
+a nakoniec aktualizuje formulu v tape
 [alhafoudh/homebrew-edupage](https://github.com/alhafoudh/homebrew-edupage) na nový tag
 (cez deploy key v secrete `HOMEBREW_TAP_DEPLOY_KEY`). Tap má vlastné CI, ktoré formulu
 postaví a otestuje na macOS (arm64, Intel) aj Linuxe (x64, arm64). Každý krok je
@@ -279,6 +286,6 @@ idempotentný, takže zlyhaný beh stačí spustiť znova.
 
 ## Rozsah
 
-Read-only, zámerne. Nič tu do Edupage nezapisuje - žiadne odpovede na správy, žiadne
+Zámerne iba na čítanie. Do Edupage sa nič nezapisuje - žiadne odpovede na správy, žiadne
 označovanie úloh za hotové, žiadne podpisovanie známok. `spec/registry_parity_spec.rb`
 aj samostatný CI job overujú, že sa v `lib/` neobjaví write endpoint.
