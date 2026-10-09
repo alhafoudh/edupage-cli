@@ -129,7 +129,7 @@ RSpec.describe "edupage mcp-add" do
       expect(File.exist?("#{path}.bak")).to be(true)
     end
 
-    it "writes a file only the owner can read, since it carries the token" do
+    it "writes a file only the owner can read, since it carries the token", :posix do
       run("claude-desktop", "--http")
 
       expect(File.stat(path).mode & 0o777).to eq(0o600)

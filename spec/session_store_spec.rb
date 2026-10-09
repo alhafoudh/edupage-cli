@@ -36,7 +36,7 @@ RSpec.describe Edupage::SessionStore do
     expect(store.all("u@example.com")).to eq({})
   end
 
-  it "stores session ids in a file only the owner can read" do
+  it "stores session ids in a file only the owner can read", :posix do
     store.store("u@example.com", "zsdemo", session_id: "abc")
 
     expect(File.stat(path).mode & 0o777).to eq(0o600)
@@ -61,7 +61,7 @@ RSpec.describe Edupage::SessionStore do
   end
 
   describe "#with_lock" do
-    it "makes a second process wait for the first to finish" do
+    it "makes a second process wait for the first to finish", :posix do
       # The cursor switch and the fetch that depends on it must not interleave with
       # another process, so this has to be a real file lock rather than a mutex.
       hold = 0.4

@@ -387,8 +387,7 @@ module Edupage
     end
 
     def bundler_path
-      path = `which bundle 2>/dev/null`.strip
-      path.empty? ? "bundle" : path
+      which("bundle") || "bundle"
     end
 
     # Claude Code owns its own config, so registration goes through its CLI rather than
@@ -481,9 +480,12 @@ module Edupage
       File.rename(temp, path)
     end
 
+    # Windows finds `bundle` as bundle.bat, so the PATHEXT extensions are tried too.
     def which(command)
+      extensions = [""] + ENV.fetch("PATHEXT", "").split(File::PATH_SEPARATOR)
       ENV.fetch("PATH", "").split(File::PATH_SEPARATOR)
-         .map { |dir| File.join(dir, command) }
+         .product(extensions)
+         .map { |dir, ext| File.join(dir, command + ext) }
          .find { |candidate| File.executable?(candidate) && !File.directory?(candidate) }
     end
 

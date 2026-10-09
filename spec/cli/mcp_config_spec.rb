@@ -36,9 +36,9 @@ RSpec.describe "edupage mcp-config" do
       # path or an inherited Gemfile would not survive.
       result = entry
 
-      expect(result["command"]).to start_with("/")
+      expect(File.absolute_path?(result["command"])).to be(true), result["command"]
       expect(result["args"].first(2)).to eq(["exec", File.expand_path($PROGRAM_NAME)])
-      expect(result["env"]["BUNDLE_GEMFILE"]).to start_with("/")
+      expect(File.absolute_path?(result["env"]["BUNDLE_GEMFILE"])).to be(true)
     end
 
     it "carries no token, because stdio has nothing to authenticate" do

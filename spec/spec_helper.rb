@@ -55,6 +55,10 @@ RSpec.configure do |config|
 
   config.filter_run_excluding(keychain: true) unless Edupage::Credentials::Keychain.available?
 
+  # Unix file modes and fork do not exist on Windows; NTFS ACLs on the user profile are
+  # what protect the files there.
+  config.filter_run_excluding(posix: true) if Gem.win_platform?
+
   # Recording against the real account needs credentials and a network, so it only runs
   # when asked for by tag.
   config.filter_run_excluding(live: true)

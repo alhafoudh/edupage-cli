@@ -15,6 +15,10 @@ jobs:
         # macos-latest is already arm64; the -arm runners add arm64 Linux and Windows.
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest, windows-11-arm]
         ruby: ["3.2", "3.3", "3.4", "4.0"]
+        # setup-ruby has no Windows arm64 builds older than 3.4.
+        exclude:
+          - { os: windows-11-arm, ruby: "3.2" }
+          - { os: windows-11-arm, ruby: "3.3" }
 
     steps:
       - uses: actions/checkout@v4
