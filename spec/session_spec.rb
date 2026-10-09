@@ -121,6 +121,16 @@ RSpec.describe Edupage::Session do
       expect { session.get("/user/") }.to raise_error(Edupage::SessionExpiredError)
     end
 
+    it "names two-factor approval instead of retrying a login that cannot help" do
+      client.on("/user/", redirect_to_login)
+      allow(Edupage::Client).to receive(:mauth).and_return(
+        [{ userid: "Rodic-1", origin: "zsdemo", session_id: "half", role: "Rodic", needs_2fa: true }]
+      )
+
+      expect { session.get("/user/") }.to raise_error(Edupage::TwoFactorRequiredError, /zsdemo requires two-factor/)
+      expect(client.paths.count("/user/")).to eq(1)
+    end
+
     it "reports when the account lost access to the school" do
       client.on("/user/", redirect_to_login)
       allow(Edupage::Client).to receive(:mauth).and_return(

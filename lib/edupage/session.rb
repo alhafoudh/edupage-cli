@@ -50,6 +50,7 @@ module Edupage
       users = Client.mauth(school: origin, username: username, password: @credentials.password)
       entry = users.find { |u| u[:origin] == origin }
       raise SessionExpiredError, "Account #{username} no longer has access to #{origin}" unless entry
+      raise TwoFactorRequiredError, origin if entry[:needs_2fa]
 
       @client.session_id = entry[:session_id]
       @userid = entry[:userid]

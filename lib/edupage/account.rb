@@ -20,6 +20,8 @@ module Edupage
 
       private
 
+      # A dead session is renewed rather than dropped: sessions expire one school at a
+      # time, and dropping one would hide that school until all the others died too.
       def restore(username, credentials, store)
         store.all(username).filter_map do |origin, entry|
           session = Session.new(
@@ -27,8 +29,25 @@ module Edupage
             credentials: credentials, userid: entry[:userid], role: entry[:role],
             name: entry[:name], store: store
           )
-          session if session.valid?
+          next session if session.valid?
+
+          Edupage.logger.debug("Stored session for #{origin} expired, logging in again")
+          renew(session, store)
         end
+      end
+
+      # Only a school the account can no longer reach is dropped, and forgotten so it is
+      # not pinged again. A wrong password still raises.
+      #
+      # A school behind 2FA stays listed, so asking for its data names the real problem
+      # instead of "no such school"; the other schools must stay usable meanwhile.
+      def renew(session, store)
+        session.refresh!
+      rescue TwoFactorRequiredError
+        session
+      rescue SessionExpiredError
+        store.delete(session.username, session.origin)
+        nil
       end
 
       def authenticate(credentials, store)

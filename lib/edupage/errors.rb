@@ -22,6 +22,19 @@ module Edupage
   # The stored session is no longer valid and could not be renewed.
   class SessionExpiredError < Error; end
 
+  # The school demands two-factor approval for this login. Edupage still hands out a
+  # session id and answers the liveness ping, but every page redirects to /login/, so
+  # logging in again cannot help.
+  class TwoFactorRequiredError < LoginError
+    attr_reader :origin
+
+    def initialize(origin)
+      @origin = origin
+      super("#{origin} requires two-factor approval for this login, which edupage-cli " \
+            "cannot complete yet. Data from this school is unavailable.")
+    end
+  end
+
   # Edupage answered, but not with anything we can read.
   class ParseError < Error
     attr_reader :snippet

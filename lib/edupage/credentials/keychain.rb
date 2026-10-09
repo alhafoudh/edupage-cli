@@ -1,4 +1,5 @@
 require "open3"
+require "rbconfig"
 
 module Edupage
   class Credentials
@@ -12,6 +13,9 @@ module Edupage
     class Keychain
       SERVICE = "edupage-cli".freeze
       SECURITY = "/usr/bin/security".freeze
+      # Runs a command in a new session, without a controlling terminal. macOS ships no
+      # setsid(1), so Ruby itself does the setsid before exec.
+      DETACH = [RbConfig.ruby, "-e", "Process.setsid; exec(*ARGV)"].freeze
 
       class << self
         def available?
@@ -49,8 +53,10 @@ module Edupage
         raise ArgumentError, "password must not be empty" if secret.empty?
 
         # -w last with no value: `security` prompts on stdin rather than taking argv.
+        # It prefers /dev/tty over stdin when it has a terminal, so it runs detached
+        # from ours; otherwise it would ignore stdin_data and prompt the user instead.
         _out, err, status = Open3.capture3(
-          SECURITY, "add-generic-password", "-s", @service, "-a", username,
+          *DETACH, SECURITY, "add-generic-password", "-s", @service, "-a", username,
           "-l", "#{@service} (#{username})", "-U", "-w",
           stdin_data: "#{secret}\n#{secret}\n"
         )
