@@ -63,9 +63,10 @@ module Edupage
 
         private
 
-        def api = self.class.api
-
+        # Each entry point fetches the API first: that is what requires Fiddle, so it has
+        # to happen before any other Fiddle constant is touched.
         def read(username)
+          api = self.class.api
           slot = Fiddle::Pointer.malloc(Fiddle::SIZEOF_VOIDP, Fiddle::RUBY_FREE)
           return nil if api.CredReadW(wide(target_name(username)), CRED_TYPE_GENERIC, 0, slot).zero?
 
@@ -79,6 +80,7 @@ module Edupage
         end
 
         def write(username, secret)
+          api = self.class.api
           # Locals keep the buffers alive until CredWriteW has copied them.
           target = wide(target_name(username))
           user = wide(username)
@@ -105,6 +107,7 @@ module Edupage
         end
 
         def remove(username)
+          api = self.class.api
           return true unless api.CredDeleteW(wide(target_name(username)), CRED_TYPE_GENERIC, 0).zero?
           return false if Fiddle.win32_last_error == ERROR_NOT_FOUND
 
