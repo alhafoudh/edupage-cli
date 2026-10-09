@@ -25,6 +25,10 @@ Gem::Specification.new do |spec|
   spec.executables = ["edupage"]
   spec.require_paths = ["lib"]
 
+  # Windows Credential Manager is reached through Fiddle. It ships with Ruby (a default
+  # gem up to 3.4, a bundled gem from 4.0), so this never compiles anything; it is
+  # declared because Bundler hides bundled gems that are not.
+  spec.add_dependency "fiddle", ">= 1.1"
   spec.add_dependency "mcp", "~> 1.2"
   spec.add_dependency "mechanize", "~> 2.12"
   spec.add_dependency "puma", ">= 6.0"

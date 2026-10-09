@@ -35,8 +35,8 @@ nainštaluje Ruby+Devkit 3.4 cez winget a nástroje MSYS2 na zostavovanie cez `r
 nainštaluje gem edupage-cli. Na Windows na ARM navyše nainštaluje libxml2/libxslt z MSYS2
 a zostaví s nimi nokogiri, pretože pre arm64 Windows nie je dostupný predkompilovaný gem.
 
-Na Windows nie je dostupný macOS keychain, preto `edupage login` nefunguje. Prihlasovacie
-údaje nastav cez premenné prostredia:
+Potom sa prihlás cez `edupage login`. Heslo sa uloží do Správcu poverení Windows
+(Credential Manager). Prihlasovacie údaje môžeš nastaviť aj cez premenné prostredia:
 
 ```powershell
 setx EDUPAGE_USERNAME "tvoje_pouzivatelske_meno"
@@ -75,8 +75,8 @@ bundle install
 bundle exec exe/edupage login
 ```
 
-`login` najprv overí heslo prihlásením do Edupage a až potom ho uloží do macOS
-keychainu, takže heslo s preklepom neuloží.
+`login` najprv overí heslo prihlásením do Edupage a až potom ho uloží do úložiska
+hesiel operačného systému, takže heslo s preklepom neuloží.
 
 ## Prihlasovacie údaje
 
@@ -85,10 +85,23 @@ Hľadajú sa v tomto poradí:
 | Poradie | Zdroj |
 |---|---|
 | 1 | `EDUPAGE_USERNAME`, `EDUPAGE_PASSWORD`, `EDUPAGE_SCHOOL` |
-| 2 | macOS keychain (service `edupage-cli`), cez `edupage login` |
+| 2 | `--username`, `--school`, potom `~/.config/edupage-cli/config.yml` (len meno a škola) |
+| 3 | úložisko hesiel systému, cez `edupage login` (len heslo) |
 
-`edupage auth` ukáže, ktorý zdroj sa práve používa, a upozorní, keď má `EDUPAGE_PASSWORD`
-prednosť pred heslom v keychaine - inak by to vyzeralo, že `edupage login` nič neurobil.
+Úložisko hesiel podľa systému:
+
+| Systém | Úložisko |
+|---|---|
+| macOS | keychain (service `edupage-cli`) |
+| Windows | Správca poverení, generic credential `edupage-cli:<meno>` |
+| Linux | Secret Service (GNOME Keyring, KWallet) cez `secret-tool`, atribúty `service=edupage-cli`, `account=<meno>` |
+
+Na Linuxe treba mať nainštalovaný `secret-tool` (balík `libsecret-tools` alebo `libsecret`)
+a bežiacu D-Bus session. Bez nich ostáva len `EDUPAGE_PASSWORD`.
+
+Keď je nastavená `EDUPAGE_PASSWORD`, úložisko hesiel sa vôbec nepoužije, ani sa do neho
+nenahliada. `edupage auth` ukáže, ktorý zdroj sa práve používa, a pri úložisku vtedy napíše
+`not consulted` - inak by to vyzeralo, že `edupage login` nič neurobil.
 
 Nastavenia bez citlivých údajov sú v `~/.config/edupage-cli/config.yml`, session a cache stránok
 v `~/.cache/edupage-cli/`.
@@ -310,8 +323,10 @@ z ručne napísaného zoznamu - spadne teda aj vtedy, keď pribudne spolužiak a
 text: Edupage posiela stránky gzipnuté a kontrola mien by v komprimovanom tele nič
 nenašla, hoci by v ňom všetky mená zostali.
 
-CI beží na Ruby 3.2, 3.3 a 3.4 na Linuxe, plus jeden macOS job, ktorý si vytvorí vlastný
-odomknutý keychain, aby sa keychain testy naozaj spustili a nepreskočili.
+CI beží na Ruby 3.2 až 4.0 na Linuxe, macOS a Windows. Každý adapter úložiska hesiel sa
+testuje proti skutočnému úložisku na svojom systéme: macOS job si vytvorí vlastný odomknutý
+keychain, Linux job spustí gnome-keyring v D-Bus session a Windows job použije Správcu
+poverení. Na ostatných systémoch sa tieto testy preskočia.
 
 ### Vydanie
 

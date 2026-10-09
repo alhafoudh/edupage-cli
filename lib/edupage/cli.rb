@@ -45,11 +45,11 @@ module Edupage
 
     # --- credentials -------------------------------------------------------------------
 
-    desc "login", "Verify credentials and store the password in the macOS keychain"
+    desc "login", "Verify credentials and store the password in the OS credential store"
     method_option :username, type: :string, desc: "Edupage login (email)"
     method_option :stdin, type: :boolean, desc: "Read the password from stdin instead of prompting"
     def login
-      keychain = require_keychain!
+      store = require_system_adapter!
       username = options[:username] || Edupage.config.default_username ||
                  ask("Username (email):")
       school = options[:school] || Edupage.config.default_school || ask("School (e.g. zsdemo):")
@@ -57,23 +57,26 @@ module Edupage
 
       raise Error, "No password given" if password.empty?
 
-      # Verified before it is stored, so a typo never ends up in the keychain.
+      # Verified before it is stored, so a typo never ends up in the store.
       users = Client.mauth(school: school, username: username, password: password)
-      keychain.store(username: username, password: password)
+      store.store(username: username, password: password)
 
-      say "Stored password for #{username}."
+      say "Stored password for #{username} in the #{store.display_name}."
       say "Schools: #{users.map { |u| u[:origin] }.join(", ")}"
       remember_defaults(username, school)
+      return unless Credentials.new.password_from_env?
+
+      say "EDUPAGE_PASSWORD is set and wins over the stored password until you unset it.", :yellow
     end
 
-    desc "logout", "Remove the stored password from the keychain"
+    desc "logout", "Remove the stored password from the OS credential store"
     method_option :username, type: :string
     def logout
-      keychain = require_keychain!
+      store = require_system_adapter!
       username = options[:username] || Edupage.config.default_username or
         raise MissingCredentialsError, "No username; pass --username."
 
-      say(keychain.delete(username: username) ? "Removed password for #{username}." : "Nothing stored for #{username}.")
+      say(store.delete(username: username) ? "Removed password for #{username}." : "Nothing stored for #{username}.")
       say "Session cache is separate; use `edupage session logout` to drop it.", :yellow
     end
 
@@ -87,12 +90,8 @@ module Edupage
                         auth_row("school", safe { credentials.school }, credentials.school_source),
                         auth_row("password", credentials.password_source ? "(set)" : "(missing)",
                                  credentials.password_source),
-                        auth_row("keychain", keychain_status(username), nil)
+                        auth_row("credential store", credential_store_status(credentials, username), nil)
                       ])
-
-      return unless credentials.password_shadowed?
-
-      say "EDUPAGE_PASSWORD is set and overrides the keychain entry.", :yellow
     end
 
     # --- session and cache ---------------------------------------------------------------
@@ -115,7 +114,7 @@ module Edupage
         say "Logged in again: #{account.schools.map(&:origin).join(", ")}"
       when "logout"
         store.delete(username)
-        say "Dropped stored sessions for #{username}. The keychain password is untouched."
+        say "Dropped stored sessions for #{username}. The stored password is untouched."
       else
         raise Error, "Unknown session subcommand #{subcommand.inspect}"
       end
@@ -310,12 +309,9 @@ module Edupage
                     format: options[:json] ? :json : (options[:yaml] ? :yaml : :table))
     end
 
-    def require_keychain!
-      unless Credentials::Keychain.available?
-        raise Thor::Error, "The macOS keychain is unavailable on #{RUBY_PLATFORM}; use EDUPAGE_PASSWORD."
-      end
-
-      Credentials::Keychain.new
+    def require_system_adapter!
+      Credentials.system_adapter or
+        raise Thor::Error, "No OS credential store is available on #{RUBY_PLATFORM}; use EDUPAGE_PASSWORD."
     end
 
     def ask_password
@@ -525,11 +521,17 @@ module Edupage
       "'#{part.gsub("'", %q('\''))}'"
     end
 
-    def keychain_status(username)
-      return "unavailable on #{RUBY_PLATFORM}" unless Credentials::Keychain.available?
-      return "available (service edupage-cli), but no username to look up" unless username
+    # Reads the outcome off the password resolution instead of asking the store again,
+    # so with EDUPAGE_PASSWORD set the store is never touched.
+    def credential_store_status(credentials, username)
+      return "not consulted (EDUPAGE_PASSWORD set)" if credentials.password_from_env?
 
-      Credentials::Keychain.new.stored?(username: username) ? "stored for #{username}" : "nothing stored for #{username}"
+      adapter = Credentials.system_adapter
+      return "unavailable on #{RUBY_PLATFORM}" unless adapter
+      return "#{adapter.display_name}, but no username to look up" unless username
+
+      stored = credentials.password_source == adapter.source_for(:password)
+      "#{adapter.display_name}, #{stored ? "stored" : "nothing stored"} for #{username}"
     end
 
     def auth_row(label, value, source)
