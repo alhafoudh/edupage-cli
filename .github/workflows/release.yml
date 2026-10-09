@@ -49,8 +49,9 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
+          # Before the first release the endpoint answers 404 and curl prints nothing.
           if curl -fsS https://rubygems.org/api/v1/versions/edupage-cli.json 2>/dev/null \
-               | ruby -rjson -e 'exit(JSON.parse(STDIN.read).any? { |v| v["number"] == ENV["VERSION"] } ? 0 : 1)'; then
+               | ruby -rjson -e 'body = STDIN.read; exit(!body.empty? && JSON.parse(body).any? { |v| v["number"] == ENV["VERSION"] })'; then
             echo "rubygems=true" >> "$GITHUB_OUTPUT"
           else
             echo "rubygems=false" >> "$GITHUB_OUTPUT"
