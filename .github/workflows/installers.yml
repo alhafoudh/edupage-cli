@@ -1,0 +1,93 @@
+name: Installers
+
+# Runs the one-line installers from the checkout, piped into the shell exactly as the
+# README pipes them from raw.githubusercontent.com. They install the published gem and
+# the tap formula, not this checkout, so only changes to the installers trigger it.
+on:
+  push:
+    branches: [main]
+    paths: [install.sh, install.ps1, .github/workflows/installers.yml]
+  pull_request:
+    paths: [install.sh, install.ps1, .github/workflows/installers.yml]
+  workflow_dispatch:
+
+jobs:
+  unix:
+    name: install.sh (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: "macOS, Homebrew", os: macos-latest, via: brew }
+          - { name: "macOS, gem", os: macos-latest, via: gem }
+          - { name: "Linux, gem", os: ubuntu-latest, via: gem }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        if: matrix.via == 'gem'
+        with:
+          ruby-version: "3.4"
+
+      # The runner's Homebrew would win over Ruby, so the gem path gets a PATH with
+      # only setup-ruby's Ruby and the system tools the native gems compile with.
+      - name: Hide Homebrew
+        if: matrix.via == 'gem'
+        run: echo "INSTALL_PATH=$(dirname "$(command -v ruby)"):/usr/bin:/bin" >> "$GITHUB_ENV"
+
+      - name: Run the installer
+        run: cat install.sh | env PATH="${INSTALL_PATH:-$PATH}" sh
+
+      - name: Run edupage
+        run: env PATH="${INSTALL_PATH:-$PATH}" edupage version
+
+  unix-missing:
+    name: install.sh (macOS, no Homebrew, old Ruby)
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # /usr/bin/ruby on macOS is 2.6, so the installer has nothing to install with
+      # and has to stop with an error instead of half-installing.
+      - name: Run the installer and expect it to refuse
+        run: |
+          if cat install.sh | env PATH=/usr/bin:/bin sh; then
+            echo "::error::install.sh succeeded without Homebrew or Ruby 3.2+"
+            exit 1
+          fi
+
+  windows:
+    name: install.ps1 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # windows-11-arm covers the nokogiri build against MSYS2's libxml2.
+        os: [windows-latest, windows-11-arm]
+
+    # Windows PowerShell 5.1, what `irm | iex` runs in for most users.
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The winget branch is not covered: the runners come with Ruby, and the installer
+      # reloads PATH from the registry, which would find it again.
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      # irm decodes the script as UTF-8 from the response header; Get-Content needs to
+      # be told, or 5.1 reads it as ANSI.
+      - name: Run the installer
+        run: Get-Content install.ps1 -Raw -Encoding UTF8 | Invoke-Expression
+
+      # The installer reports failures instead of throwing, so it never closes the
+      # user's window; a missing edupage is what fails the job.
+      - name: Run edupage
+        run: edupage version

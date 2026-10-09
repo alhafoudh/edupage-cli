@@ -11,6 +11,43 @@ rieši knižnica za teba.
 
 ## Inštalácia
 
+### Inštalácia jedným príkazom
+
+**macOS (funguje aj na Linuxe)**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/alhafoudh/edupage-cli/main/install.sh | sh
+```
+
+Skript použije Homebrew, ak je dostupný, inak nainštaluje gem cez Ruby 3.2 alebo novšie.
+Ak nie je dostupná ani jedna možnosť, skončí s pokynmi. Homebrew ani Ruby sám neinštaluje.
+
+**Windows (PowerShell)**
+
+```powershell
+irm https://raw.githubusercontent.com/alhafoudh/edupage-cli/main/install.ps1 | iex
+```
+
+Skript použije existujúce Ruby 3.2 alebo novšie. Ak Ruby nie je nainštalované vôbec,
+nainštaluje Ruby+Devkit 3.4 cez winget a nástroje MSYS2 na zostavovanie cez `ridk install`. Potom
+nainštaluje gem edupage-cli. Na Windows na ARM navyše nainštaluje libxml2/libxslt z MSYS2
+a zostaví s nimi nokogiri, pretože pre arm64 Windows nie je dostupný predkompilovaný gem.
+
+Na Windows nie je dostupný macOS keychain, preto `edupage login` nefunguje. Prihlasovacie
+údaje nastav cez premenné prostredia:
+
+```powershell
+setx EDUPAGE_USERNAME "tvoje_pouzivatelske_meno"
+setx EDUPAGE_PASSWORD "tvoje_heslo"
+setx EDUPAGE_SCHOOL "tvoja_skola"
+```
+
+Po nastavení otvor nové okno terminálu, aby sa premenné načítali.
+
+edupage-cli si môžeš nainštalovať aj manuálne nasledujúcimi spôsobmi.
+
+### Ručná inštalácia
+
 Cez Homebrew na macOS aj Linuxe:
 
 ```bash
