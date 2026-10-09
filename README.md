@@ -4,6 +4,8 @@ Read-only prístup k účtu na [Edupage](https://www.edupage.org) - ako Ruby kni
 REST API a MCP server. Všetky štyri rozhrania používajú rovnaký kód a ich zhodu
 stráži parity test.
 
+![edupage v termináli](docs/screenshot.png)
+
 Edupage nemá verejné API. Každá stránka je HTML vygenerované na serveri s JSON-om
 vloženým do blokov `<script>`. Session si navyše interne pamätá "aktuálne dieťa"
 a "aktuálny školský rok", ktoré treba nastaviť pred načítaním dát. Toto všetko
