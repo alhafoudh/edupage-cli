@@ -162,9 +162,12 @@ module Edupage
     method_option :host, type: :string, desc: "Bind address (default 127.0.0.1)"
     method_option :port, type: :numeric, desc: "Port (default 4567)"
     method_option :token, type: :string, desc: "Bearer token (default: generated, stored in config)"
+    method_option :public, type: :boolean, desc: "Public multi-user mode with OAuth login (see README)"
+    method_option :public_url, type: :string, desc: "External https URL (default EDUPAGE_PUBLIC_URL)"
     def server
       Server.start(host: options[:host], port: options[:port], token: options[:token],
-                   account_options: account_options)
+                   account_options: account_options, public: options[:public] || false,
+                   public_url: options[:public_url])
     end
 
     desc "mcp", "Serve MCP over stdio, for editors and desktop clients"

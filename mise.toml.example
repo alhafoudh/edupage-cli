@@ -1,5 +1,5 @@
 [tools]
-ruby = "3.4.5"
+ruby = "4.0.10"
 
 # Copy to mise.toml (which is gitignored) and fill in your own school and account.
 #

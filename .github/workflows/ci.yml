@@ -73,6 +73,28 @@ jobs:
             bundle exec rspec
           '
 
+  # The public server image must keep building; it is only pushed by the release.
+  docker:
+    name: docker image builds
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: docker build -t edupage-cli:ci .
+
+      - name: The image starts and answers its health check
+        run: |
+          docker run -d --name edupage -p 127.0.0.1:4567:4567 \
+            -e EDUPAGE_PUBLIC_URL=http://localhost:4567 \
+            -e EDUPAGE_SECRET_KEY="$(openssl rand -base64 32)" edupage-cli:ci
+          for _ in $(seq 1 20); do
+            curl -fsS http://127.0.0.1:4567/healthz && exit 0
+            sleep 1
+          done
+          docker logs edupage
+          exit 1
+
   read-only:
     name: no write endpoints
     runs-on: ubuntu-latest

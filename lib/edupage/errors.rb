@@ -8,6 +8,10 @@ module Edupage
   # Edupage rejected the credentials.
   class LoginError < Error; end
 
+  # Edupage rejected the username or password itself, as opposed to failing to answer.
+  # The public server drops a grant on this and only this.
+  class BadCredentialsError < LoginError; end
+
   # The login matched several accounts and none was selected.
   class AmbiguousAccountError < LoginError
     attr_reader :candidates

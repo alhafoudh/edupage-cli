@@ -13,6 +13,12 @@ module Edupage
     USER_AGENT = "edupage-cli/#{VERSION} (+https://github.com/alhafoudh/edupage-cli)".freeze
     MAUTH_PATH = "/login/mauth".freeze
 
+    # What a request to Edupage can fail with below the HTTP level.
+    TRANSPORT_ERRORS = [
+      Mechanize::Error, Net::OpenTimeout, Net::ReadTimeout, Timeout::Error, SocketError,
+      SystemCallError, EOFError, OpenSSL::SSL::SSLError
+    ].freeze
+
     # Mirrors the payload the official mobile client sends. Most fields are ignored by
     # the server but omitting them changes the response shape.
     MAUTH_PAYLOAD = {
@@ -59,7 +65,7 @@ module Edupage
 
         users = data["users"] || []
         if users.empty?
-          raise LoginError, data["needEdupage"] ? "Incorrect username" : "Incorrect password"
+          raise BadCredentialsError, data["needEdupage"] ? "Incorrect username" : "Incorrect password"
         end
 
         users.map do |user|
@@ -75,6 +81,13 @@ module Edupage
         end
       rescue JSON::ParserError => e
         raise LoginError, "Login endpoint returned something that is not JSON: #{e.message}"
+      rescue Mechanize::ResponseCodeError => e
+        # A subdomain that is not an Edupage school answers the login with 404.
+        raise NotFoundError, "No school #{school} on Edupage" if e.response_code.to_i == 404
+
+        raise RequestError, "Login at #{school} failed with HTTP #{e.response_code}"
+      rescue *TRANSPORT_ERRORS => e
+        raise RequestError, "Login at #{school} failed: #{e.class}"
       end
 
       def build_agent

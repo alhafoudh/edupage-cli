@@ -20,6 +20,21 @@ RSpec.describe Edupage::Models::Grade do
       expect(subject.created_at.to_date).to eq(Date.new(2026, 1, 27))
     end
 
+    it "serializes references with their names next to the ids" do
+      hash = grade.to_h
+
+      expect(hash).to include(subject: "34482", subject_name: "Matematika",
+                              teacher: "120227", teacher_name: "Dominika Horváthová",
+                              student: "113506", student_name: "Jana Nováková")
+    end
+
+    it "names every reference in a list and the class of a student" do
+      jana = school.student("113506")
+
+      expect(jana.to_h).to include(school_class: "117967", school_class_name: "4.A",
+                                   parents: ["-1"], parents_names: ["Ahmed Novák"])
+    end
+
     it "reports whether a parent has signed it" do
       expect(grade).to be_signed_by_parent
       expect(grade(row: { "podpisane_rodic" => nil })).not_to be_signed_by_parent

@@ -1,0 +1,34 @@
+<p>Prístup žiada: <strong><%= h(client_name.to_s.empty? ? "neznáma aplikácia" : client_name) %></strong>
+  <span class="muted">(názov uvádza aplikácia sama, nie je overený)</span></p>
+<p>Prihlásenie sa odošle na: <strong><%= h(redirect_host) %></strong></p>
+
+<% unless claude %>
+  <p class="danger">Toto nie je Claude. Pokračuj, len ak tejto aplikácii dôveruješ.</p>
+<% end %>
+
+<p class="warn">Tento server si tvoje heslo neukladá. Použije ho iba na prihlásenie a ponechá si len prihlásenie (session) do Edupage. Keď vyprší, pripoj sa znova. Pokračuj, len ak dôveruješ prevádzkovateľovi tohto servera.</p>
+<p class="muted">Prístup je iba na čítanie, nič sa do Edupage nezapíše.</p>
+<p class="muted">Ak má škola dvojstupňové overenie, v ďalšom kroku ho potvrdíš v aplikácii Edupage alebo kódom z e-mailu.</p>
+
+<% if error %>
+  <p class="error"><%= h(error) %></p>
+<% end %>
+
+<form method="post" action="/oauth/authorize" autocomplete="on">
+  <input type="hidden" name="pending_id" value="<%= h(auth.id) %>">
+  <input type="hidden" name="csrf" value="<%= h(auth.csrf) %>">
+
+  <label for="school">Škola</label>
+  <input type="text" id="school" name="school" placeholder="napr. zsmojaskola" required
+         autocapitalize="off" autocorrect="off" spellcheck="false">
+  <p class="muted">Začiatok adresy školy, teda <em>zsmojaskola</em> z <em>zsmojaskola.edupage.org</em>.</p>
+
+  <label for="username">Prihlasovacie meno</label>
+  <input type="text" id="username" name="username" autocomplete="username" required
+         autocapitalize="off" autocorrect="off" spellcheck="false">
+
+  <label for="password">Heslo</label>
+  <input type="password" id="password" name="password" autocomplete="current-password" required>
+
+  <button type="submit">Prihlásiť a povoliť prístup</button>
+</form>

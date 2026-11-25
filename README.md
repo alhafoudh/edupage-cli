@@ -250,6 +250,111 @@ použiť akýkoľvek iný balíčkovač. MCP klienti navyše spúšťajú server
 nastaveného locale**, preto každý súbor otvárame výslovne ako UTF-8 a nespoliehame sa
 na `Encoding.default_external`.
 
+## Verejný MCP server pre Claude
+
+`edupage server --public` z edupage-cli spraví MCP server, ktorý si ktokoľvek s jeho
+adresou pridá do Clauda (web, desktop, mobil) ako vlastný konektor. Nič sa neinštaluje
+lokálne. Pri pripájaní Claude otvorí prihlasovaciu stránku tohto servera, kde sa zadá
+škola, meno a heslo k Edupage. Server ich overí priamo voči Edupage a od tej chvíle
+odpovedá na otázky Clauda iba dátami toho jedného účtu.
+
+V tomto režime beží len MCP (`/mcp`), OAuth a `/healthz`. REST API je vypnuté.
+
+### Bezpečnosť
+
+- Heslo k Edupage sa **neukladá**. Server ho použije iba počas prihlásenia a ponechá si
+  len session z Edupage pre každú školu. Keď session vyprší, Claude dostane správu, že
+  treba konektor odpojiť a znova pripojiť.
+- Session sú šifrované (AES-256-GCM) kľúčom odvodeným z tokenu, ktorý má iba pripojený
+  klient, a z tajomstva servera. Samotná databáza nič neprezradí, ani spolu
+  s `EDUPAGE_SECRET_KEY`. Session prežijú reštart servera.
+- Kto prevádzkuje server, by heslo počas prihlásenia teoreticky videl. Prihlasovacia
+  stránka to hovorí otvorene.
+- Na `/data` leží aj cache stiahnutých dát (známky, rozvrhy) pre každé pripojenie,
+  nešifrovaná. Pri odpojení sa zmaže.
+- Účty sú od seba oddelené: každé pripojenie má vlastnú session, vlastnú cache a vlastný
+  zámok, parameter `username` z MCP volaní sa ignoruje.
+- Iba na čítanie, rovnako ako celý projekt.
+- Pripojiť sa môže akákoľvek OAuth aplikácia, nielen Claude. Ak sa prihlásenie odosiela
+  inam ako do Clauda, stránka zobrazí výrazné varovanie.
+- Neúspešné prihlásenia sú obmedzené na 5 za 15 minút pre IP adresu aj pre účet.
+
+### Dvojstupňové overenie
+
+Ak má škola zapnuté dvojstupňové overenie, prihlasovacia stránka po hesle počká:
+
+- **Notifikácia v aplikácii Edupage:** aplikácia v telefóne ukáže kód, ktorý sa opíše
+  do stránky.
+- **Kód e-mailom:** keď Edupage nemá kam poslať notifikáciu, pošle kód e-mailom
+  a stránka si ho vypýta.
+
+Ktorou cestou to ide, rozhoduje Edupage sám podľa toho, či je k účtu prihlásená
+aplikácia na nejakom zariadení. Kód sa pýta pre každú školu zvlášť a pri každom
+prihlásení znova; Edupage si zariadenie nepamätá. Školu sa dá aj preskočiť, ostatné
+školy z účtu sa pripoja.
+
+### Nastavenie
+
+| Premenná | Význam |
+|---|---|
+| `EDUPAGE_PUBLIC_URL` | Verejná `https://` adresa servera, napr. `https://edupage-mcp.example.com`. Povinná. |
+| `EDUPAGE_SECRET_KEY` | Aspoň 32 náhodných bajtov, napr. `openssl rand -base64 32`. Povinná. Zmena odpojí všetkých. |
+| `EDUPAGE_DATA_DIR` | Kde je databáza a cache. V image `/data`. |
+| `EDUPAGE_TRUST_PROXY` | `1`, keď server beží za reverse proxy, aby rate limit videl skutočnú IP z `X-Forwarded-For`. |
+
+### Docker Compose (Portainer)
+
+Image `ghcr.io/alhafoudh/edupage-cli` sa publikuje pri každom vydaní (amd64 aj arm64).
+Do Portainer stacku:
+
+```yaml
+services:
+  edupage:
+    image: ghcr.io/alhafoudh/edupage-cli:latest
+    restart: unless-stopped
+    environment:
+      EDUPAGE_PUBLIC_URL: https://edupage-mcp.example.com
+      EDUPAGE_SECRET_KEY: ${EDUPAGE_SECRET_KEY}
+      EDUPAGE_TRUST_PROXY: "1"
+    volumes:
+      - edupage-data:/data
+    ports:
+      - "127.0.0.1:4567:4567"
+
+volumes:
+  edupage-data:
+```
+
+`EDUPAGE_SECRET_KEY` patrí do premenných prostredia stacku, nie priamo do súboru.
+Volume `/data` treba zálohovať spolu s kľúčom, bez neho sú dáta nepoužiteľné.
+
+HTTPS je povinné, server ho sám nerieši. Najjednoduchšie cez Caddy, ktorý si certifikát
+vybaví sám:
+
+```
+edupage-mcp.example.com {
+    reverse_proxy 127.0.0.1:4567
+}
+```
+
+### Pripojenie v Claude
+
+V Claude: **Settings → Connectors → Add custom connector**, adresa
+`https://edupage-mcp.example.com/mcp`. Claude si sám zaregistruje klienta a otvorí
+prihlasovaciu stránku.
+
+Lokálne sa to dá vyskúšať aj bez Dockeru:
+
+```bash
+EDUPAGE_PUBLIC_URL=http://localhost:4567 \
+EDUPAGE_SECRET_KEY=$(openssl rand -base64 32) \
+EDUPAGE_DATA_DIR=tmp/public \
+  bundle exec exe/edupage server --public
+```
+
+Mimo Dockeru treba mať nainštalovaný gem `sqlite3` (`gem install sqlite3`), bežné CLI
+ho nepotrebuje.
+
 ## Ako udržiavame rozhrania v súlade
 
 Zdroje sú deklarované na jednom mieste, v `lib/edupage/registry/resources.rb`:

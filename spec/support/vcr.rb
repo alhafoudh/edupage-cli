@@ -35,12 +35,20 @@ VCR.configure do |config|
       interaction.request.body = request_body
         .gsub(/(\bm=)[^&]*/, '\1<USERNAME>')
         .gsub(/(\bh=)[^&]*/, '\1<PASSWORD>')
+        # The web login (WebLogin) sends JSON in rpcparams, URL-encoded.
+        .gsub(/(%22(?:password|userToken|t2fasec|username)%22%3A%22)(?:(?!%22).)*/i, '\1<FILTERED>')
     end
 
     # Edupage serves these pages gzipped. A compressed body cannot be scrubbed - and
     # worse, it would sail past any check for a real name while still containing every
     # one of them, so it is decompressed first and stored as text.
     interaction.response.decompress if interaction.response.headers["Content-Encoding"]
+
+    # Web login answers carry the session, its signature and the device id in JSON.
+    response_body = interaction.response.body.to_s
+    if response_body.match?(/"(?:session|sgn|edid|token)"/)
+      interaction.response.body = response_body.gsub(/("(?:session|sgn|edid|token)"\s*:\s*")[^"]*/, '\1<FILTERED>')
+    end
 
     # Recording happens against a live account, so the responses carry other people's
     # children, their teachers, the school's name and its subdomain - the last one in

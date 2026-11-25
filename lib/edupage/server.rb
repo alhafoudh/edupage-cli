@@ -6,12 +6,14 @@ module Edupage
 
     module_function
 
-    def start(host: nil, port: nil, token: nil, account_options: {})
+    def start(host: nil, port: nil, token: nil, account_options: {}, public: false, public_url: nil)
       require "puma"
       require "rack"
 
       host ||= Edupage.config.server["host"] || DEFAULT_HOST
       port = (port || Edupage.config.server["port"] || DEFAULT_PORT).to_i
+      # Public mode has its own authentication; the local bearer token is not involved.
+      return Public.start(host: host, port: port, public_url: public_url) if public
 
       if token
         Edupage.config["server"] = Edupage.config.server.merge("token" => token)

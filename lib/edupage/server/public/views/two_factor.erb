@@ -1,0 +1,81 @@
+<p>Škola <%= position %> z <%= total %>: <strong><%= h(school) %>.edupage.org</strong></p>
+<p class="muted">Táto škola vyžaduje dvojstupňové overenie. Každá škola z účtu ho pýta zvlášť.</p>
+
+<% if error %>
+  <p class="error"><%= h(error) %></p>
+<% end %>
+
+<% if info.channel == :push %>
+  <div id="waiting">
+    <p>Zadaj kód z aplikácie Edupage (<%= h(info.device_names.join(", ")) %>)</p>
+    <form method="post" action="/oauth/authorize/two-factor/code">
+      <input type="hidden" name="pending_id" value="<%= h(auth.id) %>">
+      <input type="hidden" name="csrf" value="<%= h(auth.csrf) %>">
+      <label for="code">Kód z aplikácie</label>
+      <input type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" required>
+      <button type="submit">Potvrdiť</button>
+    </form>
+  </div>
+  <div id="expired" hidden>
+    <p class="error">Žiadosť vypršala.</p>
+    <form method="post" action="/oauth/authorize/two-factor/resend">
+      <input type="hidden" name="pending_id" value="<%= h(auth.id) %>">
+      <input type="hidden" name="csrf" value="<%= h(auth.csrf) %>">
+      <button type="submit">Poslať znova</button>
+    </form>
+  </div>
+  <%# In the background: if the app approves directly, the page moves on by itself. %>
+  <script>
+    (function () {
+      var body = new URLSearchParams({ pending_id: <%= JSON.generate(auth.id) %>, csrf: <%= JSON.generate(auth.csrf) %> });
+      function show(id) {
+        document.getElementById("waiting").hidden = id !== "waiting";
+        document.getElementById("expired").hidden = id !== "expired";
+      }
+      function ping() {
+        fetch("/oauth/authorize/two-factor/poll", { method: "POST", body: body, credentials: "same-origin" })
+          .then(function (r) { return r.json(); })
+          .then(function (res) {
+            if (res.redirect && (res.state === "done" || res.state === "next")) { window.location = res.redirect; return; }
+            if (res.state === "expired") { show("expired"); return; }
+            setTimeout(ping, 3000);
+          })
+          .catch(function () { setTimeout(ping, 3000); });
+      }
+      setTimeout(ping, 3000);
+    })();
+  </script>
+<% else %>
+  <p>Kód sme poslali na <%= h(info.email) %></p>
+  <form method="post" action="/oauth/authorize/two-factor/code">
+    <input type="hidden" name="pending_id" value="<%= h(auth.id) %>">
+    <input type="hidden" name="csrf" value="<%= h(auth.csrf) %>">
+    <label for="code">Kód z e-mailu</label>
+    <input type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" required>
+    <button type="submit">Potvrdiť</button>
+  </form>
+  <form method="post" action="/oauth/authorize/two-factor/email">
+    <input type="hidden" name="pending_id" value="<%= h(auth.id) %>">
+    <input type="hidden" name="csrf" value="<%= h(auth.csrf) %>">
+    <button type="submit" class="secondary" id="resend" <%= retry_in.positive? ? "disabled" : "" %>>
+      Poslať znova<% if retry_in.positive? %> (<span id="countdown"><%= retry_in %></span> s)<% end %>
+    </button>
+  </form>
+  <% if retry_in.positive? %>
+    <script>
+      (function () {
+        var left = <%= retry_in.to_i %>, el = document.getElementById("countdown"), btn = document.getElementById("resend");
+        var timer = setInterval(function () {
+          left -= 1; el.textContent = left;
+          if (left <= 0) { clearInterval(timer); btn.disabled = false; btn.textContent = "Poslať znova"; }
+        }, 1000);
+      })();
+    </script>
+  <% end %>
+<% end %>
+
+<form method="post" action="/oauth/authorize/two-factor/skip">
+  <input type="hidden" name="pending_id" value="<%= h(auth.id) %>">
+  <input type="hidden" name="csrf" value="<%= h(auth.csrf) %>">
+  <button type="submit" class="secondary">Preskočiť túto školu</button>
+</form>

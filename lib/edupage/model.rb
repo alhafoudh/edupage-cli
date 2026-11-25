@@ -94,9 +94,15 @@ module Edupage
       end
     end
 
+    # References to other models serialize as their id, with the referenced name next
+    # to it (`subject: "34482", subject_name: "Matematika"`), so a reader of the JSON -
+    # a person or a model - does not have to look every id up.
     def to_h
-      self.class.attributes.keys.to_h { |name| [name, serialize(public_send(name))] }
-                          .merge(id: id).compact
+      self.class.attributes.keys.each_with_object({}) do |name, hash|
+        value = public_send(name)
+        hash[name] = serialize(value)
+        reference_names(name, value).each { |key, names| hash[key] = names }
+      end.merge(id: id).compact
     end
 
     def ==(other) = other.is_a?(self.class) && !id.nil? && id == other.id
@@ -118,6 +124,18 @@ module Edupage
       raw = spec[:block] ? instance_exec(data, &spec[:block]) : data[spec[:key]]
       CASTS.fetch(spec[:cast]).call(raw)
     end
+
+    def reference_names(name, value)
+      case value
+      when Model then { "#{name}_name": presence_of(value.name) }
+      when Array
+        models = value.grep(Model)
+        models.empty? ? {} : { "#{name}_names": models.map { |m| presence_of(m.name) }.compact }
+      else {}
+      end
+    end
+
+    def presence_of(text) = text.nil? || text.to_s.strip.empty? ? nil : text.to_s
 
     def serialize(value)
       case value

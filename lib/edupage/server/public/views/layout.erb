@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Pripojenie k Edupage</title>
+  <style>
+    body { font-family: -apple-system, system-ui, "Segoe UI", sans-serif; background: #f4f5f7; color: #1d2330;
+           margin: 0; padding: 24px 16px; }
+    main { max-width: 420px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 24px;
+           box-shadow: 0 2px 12px rgba(0, 0, 0, .08); }
+    h1 { font-size: 1.3rem; margin: 0 0 16px; }
+    p { line-height: 1.45; margin: 0 0 12px; }
+    .muted { color: #5b6475; font-size: .9rem; }
+    .warn { background: #fff4e5; border: 1px solid #f0b45a; border-radius: 8px; padding: 10px 12px; }
+    .danger { background: #fdecec; border: 1px solid #e06c6c; border-radius: 8px; padding: 10px 12px; font-weight: 600; }
+    .error { color: #b42318; font-weight: 600; }
+    label { display: block; font-weight: 600; margin: 12px 0 4px; }
+    input[type=text], input[type=password], input[type=email] { width: 100%; box-sizing: border-box; padding: 10px;
+           border: 1px solid #c8ccd4; border-radius: 8px; font-size: 1rem; }
+    button { margin-top: 16px; width: 100%; padding: 11px; border: 0; border-radius: 8px; background: #2f6fed;
+             color: #fff; font-size: 1rem; cursor: pointer; }
+    button.secondary { background: #e8ebf0; color: #1d2330; }
+    button[disabled] { opacity: .5; cursor: default; }
+    .spinner { width: 28px; height: 28px; border: 3px solid #d6dbe4; border-top-color: #2f6fed; border-radius: 50%;
+               animation: spin 1s linear infinite; margin: 8px auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Pripojenie k Edupage</h1>
+    <%= yield %>
+  </main>
+</body>
+</html>

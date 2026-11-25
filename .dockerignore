@@ -1,0 +1,12 @@
+.git
+.github
+.superpowers
+.bundle
+spec
+docs
+tmp
+pkg
+vendor
+*.gem
+mise.toml
+Gemfile.lock
