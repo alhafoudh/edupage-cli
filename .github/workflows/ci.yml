@@ -28,13 +28,15 @@ jobs:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: ${{ matrix.os != 'windows-11-arm' }}
 
-      # Nokogiri ships no precompiled gem for Windows arm64 and its bundled libxml2 does
-      # not build there, so it is compiled against MSYS2's libxml2 and libxslt instead.
-      - name: Install gems against system libxml2 (Windows arm64)
+      # Nokogiri and sqlite3 ship no precompiled gem for Windows arm64 and their bundled
+      # libraries do not build there, so they are compiled against MSYS2's libxml2,
+      # libxslt and sqlite3 instead.
+      - name: Install gems against system libraries (Windows arm64)
         if: matrix.os == 'windows-11-arm'
         run: |
-          ridk exec pacman -S --noconfirm --needed mingw-w64-clang-aarch64-libxml2 mingw-w64-clang-aarch64-libxslt
+          ridk exec pacman -S --noconfirm --needed mingw-w64-clang-aarch64-libxml2 mingw-w64-clang-aarch64-libxslt mingw-w64-clang-aarch64-sqlite3
           bundle config set --local build.nokogiri --use-system-libraries
+          bundle config set --local build.sqlite3 --enable-system-libraries
           bundle install --jobs 4
 
       # Each OS credential store adapter is tested against the real store on its own
