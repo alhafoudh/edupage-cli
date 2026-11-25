@@ -87,6 +87,18 @@ RSpec.describe "Public /mcp endpoint" do
     expect(last_request.env[public_ns::RequestLog::DETAIL]).to eq("tools/list")
   end
 
+  it "announces the Edupage icon to clients" do
+    rpc(connect("parent-a", "zsdemo").access_token, "initialize",
+        protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "spec", version: "1" })
+    info = JSON.parse(last_response.body).dig("result", "serverInfo")
+
+    expect(info["icons"].size).to eq(1)
+    icon = info["icons"].first
+    expect(icon).to include("mimeType" => "image/x-icon", "sizes" => ["32x32"])
+    expect(icon["src"]).to start_with("data:image/x-icon;base64,")
+    expect(Base64.strict_decode64(icon["src"].split(",", 2).last)).to eq(File.binread(Edupage::Server::MCP::ICON_PATH))
+  end
+
   it "has no username argument in any tool" do
     rpc(connect("parent-a", "zsdemo").access_token, "tools/list")
     tools = JSON.parse(last_response.body).dig("result", "tools")

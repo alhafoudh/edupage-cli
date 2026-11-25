@@ -1,3 +1,4 @@
+require "base64"
 require "mcp"
 
 module Edupage
@@ -9,6 +10,8 @@ module Edupage
     # lets clients skip approval prompts.
     class MCP
       SERVER_NAME = "edupage".freeze
+      # Edupage's own favicon, bundled so neither server depends on edupage.org for it.
+      ICON_PATH = File.expand_path("public/assets/favicon.ico", __dir__).freeze
 
       INSTRUCTIONS = <<~TEXT.freeze
         Read-only access to an Edupage school account: schools, students, timetables,
@@ -38,7 +41,7 @@ module Edupage
       def build_server(server_context)
         ::MCP::Server.new(
           name: SERVER_NAME, title: "Edupage", version: VERSION, instructions: INSTRUCTIONS,
-          tools: tools, server_context: server_context
+          icons: icons, tools: tools, server_context: server_context
         )
       end
 
@@ -48,8 +51,16 @@ module Edupage
           title: "Edupage",
           version: VERSION,
           instructions: INSTRUCTIONS,
+          icons: icons,
           tools: tools
         )
+      end
+
+      # Shown next to the connector by clients that support server icons (protocol
+      # 2025-11-25 and later). Embedded as a data URI, so it also works over stdio.
+      def icons
+        data = Base64.strict_encode64(File.binread(ICON_PATH))
+        [::MCP::Icon.new(src: "data:image/x-icon;base64,#{data}", mime_type: "image/x-icon", sizes: ["32x32"])]
       end
 
       # Blocks, serving MCP on stdin/stdout for editors and desktop clients.

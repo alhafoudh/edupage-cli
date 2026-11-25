@@ -9,4 +9,8 @@ RSpec.describe "edupage-cli.gemspec" do
     expect(templates).not_to be_empty
     expect(spec.files).to include(*templates)
   end
+
+  it "packages the icon the servers announce" do
+    expect(spec.files).to include("lib/edupage/server/public/assets/favicon.ico")
+  end
 end

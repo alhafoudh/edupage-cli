@@ -96,6 +96,14 @@ RSpec.describe Edupage::Server::Public::App do
     end
   end
 
+  it "serves the bundled Edupage icon as its favicon" do
+    get "/favicon.ico"
+
+    expect(last_response.status).to eq(200)
+    expect(last_response.content_type).to eq("image/x-icon")
+    expect(last_response.body.b).to eq(File.binread(Edupage::Server::MCP::ICON_PATH))
+  end
+
   describe "registration" do
     it "registers a client" do
       register

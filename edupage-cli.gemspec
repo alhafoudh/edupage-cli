@@ -19,6 +19,7 @@ Gem::Specification.new do |spec|
     "lib/**/*.rb",
     # Pages of `edupage server --public`.
     "lib/**/*.erb",
+    "lib/**/*.ico",
     "exe/*",
     "README.md",
     "LICENSE*"

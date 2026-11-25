@@ -148,6 +148,13 @@ module Edupage
         NOTHING_USABLE ="Ani jedna škola z tohto účtu sa nedala pripojiť. Začni znova v aplikácii, " \
                          "z ktorej si sa pripájal.".freeze
 
+        # Clients that show the site icon of a connector look here.
+        get "/favicon.ico" do
+          cache_control :public, max_age: 86_400
+          content_type "image/x-icon"
+          File.binread(MCP::ICON_PATH)
+        end
+
         get "/healthz" do
           content_type :json
           JSON.generate(status: "ok", version: VERSION)
