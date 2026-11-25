@@ -335,7 +335,10 @@ prejde, release workflow pushne gem na rubygems.org, vytvorí tag a GitHub relea
 a nakoniec aktualizuje formulu v tape
 [alhafoudh/homebrew-edupage](https://github.com/alhafoudh/homebrew-edupage) na nový tag
 (cez deploy key v secrete `HOMEBREW_TAP_DEPLOY_KEY`). Tap má vlastné CI, ktoré formulu
-postaví a otestuje na macOS (arm64, Intel) aj Linuxe (x64, arm64). Každý krok je
+postaví a otestuje na macOS (Apple silicon) aj Linuxe (x64, arm64). Intel Macy
+v CI nie sú: Homebrew pre ne už nemá bottles pre `ruby` ani `openssl@4`, takže by sa
+najprv hodiny kompilovali. Inštalácia na Intel Macu by mala fungovať, ale netestujeme ju
+a trvá dlho. Každý krok je
 idempotentný, takže zlyhaný beh stačí spustiť znova.
 
 ## Rozsah
