@@ -302,10 +302,10 @@ prihlásení znova; Edupage si zariadenie nepamätá. Školu sa dá aj preskoči
 | `EDUPAGE_DATA_DIR` | Kde je databáza a cache. V image `/data`. |
 | `EDUPAGE_TRUST_PROXY` | `1`, keď server beží za reverse proxy, aby rate limit videl skutočnú IP z `X-Forwarded-For`. |
 
-### Docker Compose (Portainer)
+### Docker Compose
 
 Image `ghcr.io/alhafoudh/edupage-cli` sa publikuje pri každom vydaní (amd64 aj arm64).
-Do Portainer stacku:
+`compose.yml`:
 
 ```yaml
 services:
@@ -325,7 +325,8 @@ volumes:
   edupage-data:
 ```
 
-`EDUPAGE_SECRET_KEY` patrí do premenných prostredia stacku, nie priamo do súboru.
+`EDUPAGE_SECRET_KEY` patrí do premenných prostredia (napr. `.env` vedľa `compose.yml`), nie
+priamo do súboru.
 Volume `/data` treba zálohovať spolu s kľúčom, bez neho sú dáta nepoužiteľné.
 
 HTTPS je povinné, server ho sám nerieši. Najjednoduchšie cez Caddy, ktorý si certifikát
