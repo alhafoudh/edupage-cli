@@ -149,12 +149,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Versions tagged before the Dockerfile existed (0.2.0 and older) have no image to
+      # build; they count as done.
       - name: Check whether the version already has an image
         id: existing
         env:
           IMAGE: ghcr.io/${{ github.repository }}:${{ needs.release.outputs.version }}
         run: |
-          if docker manifest inspect "$IMAGE" >/dev/null 2>&1; then
+          if [ ! -f Dockerfile ] || docker manifest inspect "$IMAGE" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
