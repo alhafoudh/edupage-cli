@@ -304,7 +304,8 @@ prihlásení znova; Edupage si zariadenie nepamätá. Školu sa dá aj preskoči
 
 ### Docker Compose
 
-Image `ghcr.io/alhafoudh/edupage-cli` sa publikuje pri každom vydaní (amd64 aj arm64).
+Image `ghcr.io/alhafoudh/edupage-cli` (amd64 aj arm64) má tagy `latest` a číslo verzie pri
+každom vydaní a `main` pre najnovší zelený commit v `main`.
 `compose.yml`:
 
 ```yaml
