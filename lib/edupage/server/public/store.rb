@@ -125,6 +125,10 @@ module Edupage
           exec("DELETE FROM tokens WHERE expires_at < ?", now)
         end
 
+        def close
+          @lock.synchronize { @db.close unless @db.closed? }
+        end
+
         def inspect = "#<#{self.class.name}>"
 
         private

@@ -1,0 +1,29 @@
+# Portainer stack for the public MCP server on obiwan (environment 4).
+# The image is built on the Docker host itself (no registry), so it must never be pulled.
+# EDUPAGE_SECRET_KEY comes from the stack's environment variables in Portainer, not from
+# this file; changing it disconnects every connected client.
+services:
+  edupage:
+    image: edupage-cli:latest
+    pull_policy: never
+    container_name: edupage
+    restart: unless-stopped
+    stop_grace_period: 10s
+    ports:
+      - "4567:4567"
+    environment:
+      EDUPAGE_PUBLIC_URL: ${EDUPAGE_PUBLIC_URL}
+      EDUPAGE_SECRET_KEY: ${EDUPAGE_SECRET_KEY}
+      EDUPAGE_TRUST_PROXY: ${EDUPAGE_TRUST_PROXY:-1}
+      TZ: Europe/Bratislava
+    volumes:
+      - edupage-data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  edupage-data:
+    name: edupage-data

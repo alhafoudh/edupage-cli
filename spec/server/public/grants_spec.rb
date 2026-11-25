@@ -204,6 +204,8 @@ RSpec.describe Edupage::Server::Public::Grants do
     expect(File.read(store_path, mode: "rb")).not_to include("s3cret")
     expect { crypto.open(crypto.derive_key(pepper: pepper, secret: ""), sealed, aad: grant_id) }
       .to raise_error(crypto::DecryptError)
+  ensure
+    db&.close
   end
 
   it "cleans up grants unused for 90 days" do

@@ -8,6 +8,7 @@ require_relative "support/vcr"
 require_relative "support/payloads"
 require_relative "support/fake_session"
 require_relative "support/system_credential_adapter"
+require_relative "support/sqlite_stores"
 
 RSpec.configure do |config|
   config.expect_with(:rspec) { |c| c.syntax = :expect }
@@ -28,6 +29,7 @@ RSpec.configure do |config|
       Edupage.reset!
       example.run
     ensure
+      SqliteStores.close_all!
       ENV.delete("EDUPAGE_CONFIG")
       ENV.delete("EDUPAGE_CACHE_DIR")
       Edupage.config = nil

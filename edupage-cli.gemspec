@@ -17,6 +17,8 @@ Gem::Specification.new do |spec|
 
   spec.files = Dir[
     "lib/**/*.rb",
+    # Pages of `edupage server --public`.
+    "lib/**/*.erb",
     "exe/*",
     "README.md",
     "LICENSE*"
